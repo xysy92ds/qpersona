@@ -20,6 +20,18 @@ function cleanExample(raw: string, character: Character, userName: string): stri
     .trim()
 }
 
+function stickerBlock(stickers?: { name: string; annotation?: string }[]): string {
+  if (!stickers?.length) return ''
+  const lines = stickers
+    .slice(0, 24)
+    .map((s) => `- ${s.name}${s.annotation ? `：${s.annotation}` : ''}`)
+    .join('\n')
+  return `\n# 你也可以发表情包
+${lines}
+想发的时候单独一行写 [表情:名字]，一次最多一个，不用每句都发。
+`
+}
+
 function memoryBlock(memoryText?: string): string {
   const t = memoryText?.trim()
   if (!t) return ''
@@ -31,7 +43,12 @@ function memoryBlock(memoryText?: string): string {
  * 关键不是「写得短」，而是明确禁止旁白 / markdown / AI 自述，
  * 否则模型很容易滑回酒馆腔。
  */
-function qqSystem(character: Character, userName: string, memoryText?: string): string {
+function qqSystem(
+  character: Character,
+  userName: string,
+  memoryText?: string,
+  stickers?: { name: string; annotation?: string }[],
+): string {
   const c = character.card
   const example = cleanExample(c.mes_example, character, userName)
   return `你正在扮演「${c.name}」，用手机 QQ 和「${userName}」私聊。你就是${c.name}本人，不是助手，不是 AI，也不是在写小说。
@@ -52,6 +69,7 @@ function qqSystem(character: Character, userName: string, memoryText?: string): 
 - 可以答非所问，可以只回「？」「哦」「不知道」，可以说「等会儿」。
 - 对方认真说事时，先接住眼前那件事，别急着讲道理、给方案、上价值。
 - 可以敷衍、可以突然认真，但不要故意伤人。
+- 对方发来 [图片] 时，如果你确实看不到图，就直接说看不到/打不开，不要编图里的内容，也不要假装看过。
 
 # 不要这样回
 - 「今天辛苦啦～要不要和我聊聊？」——客服腔。
@@ -64,7 +82,7 @@ function qqSystem(character: Character, userName: string, memoryText?: string): 
 性格：${c.personality || '（未填写）'}
 当前场景：${c.scenario || '普通的日常聊天'}
 ${c.tags?.length ? `标签：${c.tags.join('、')}` : ''}
-${example ? `\n# 说话的参考（学语气，不要照抄内容）\n${example}\n` : ''}${memoryBlock(memoryText)}
+${example ? `\n# 说话的参考（学语气，不要照抄内容）\n${example}\n` : ''}${stickerBlock(stickers)}${memoryBlock(memoryText)}
 # 发送前
 真人不会每句都完整、礼貌、恰到好处。发之前删掉一半，留点毛边。`
 }
@@ -97,11 +115,14 @@ export function buildSystemPrompt(
   profile: ContextProfileId,
   userName: string,
   memoryText?: string,
+  stickers?: { name: string; annotation?: string }[],
 ): string {
   const custom = character.ext.prompts?.[profile]?.trim()
   const base =
     custom ||
-    (profile === 'qq' ? qqSystem(character, userName, memoryText) : tavernSystem(character, userName, memoryText))
+    (profile === 'qq'
+      ? qqSystem(character, userName, memoryText, stickers)
+      : tavernSystem(character, userName, memoryText))
   if (custom && memoryText?.trim()) {
     return `${base}\n\n# 你记得的事情\n${memoryText.trim()}`
   }
@@ -118,7 +139,7 @@ export function historyText(m: Message): string {
     return `[表情包：${name}${note}]`
   }
   if (m.kind === 'file') return `[文件：${m.file?.name ?? '未命名文件'}]`
-  if (m.kind === 'image') return '[图片]'
+  if (m.kind === 'image') return m.image?.caption ? `[图片：${m.image.caption}]` : '[图片]'
   if (m.kind === 'video') return `[视频：${m.video?.name ?? '视频'}]`
   if (m.kind === 'voice') return `[语音 ${Math.max(1, Math.round(m.voice?.duration ?? 1))}″]`
   if (m.kind === 'card') {
@@ -136,6 +157,9 @@ export interface BuildArgs {
   history: Message[]
   userName: string
   memoryText?: string
+  /** 主模型本身支持图片输入时，直接把图片作为多模态内容发过去 */
+  vision?: boolean
+  stickers?: { name: string; annotation?: string }[]
 }
 
 /**
@@ -143,8 +167,8 @@ export interface BuildArgs {
  * 两套 profile 不混在同一个 system prompt 里，由这里二选一。
  */
 export function buildChatMessages(args: BuildArgs): ChatMsg[] {
-  const { character, profile, history, userName, memoryText } = args
-  const system = buildSystemPrompt(character, profile, userName, memoryText)
+  const { character, profile, history, userName, memoryText, vision, stickers } = args
+  const system = buildSystemPrompt(character, profile, userName, memoryText, stickers)
   const turns = history
     .filter(
       (m) =>
@@ -159,10 +183,19 @@ export function buildChatMessages(args: BuildArgs): ChatMsg[] {
           m.kind === 'voice'),
     )
     .slice(-HISTORY_LIMIT[profile])
-    .map<ChatMsg>((m) => ({
-      role: m.role === 'assistant' ? 'assistant' : 'user',
-      content: historyText(m),
-    }))
+    .map<ChatMsg>((m) => {
+      const role = m.role === 'assistant' ? 'assistant' : 'user'
+      if (vision && m.kind === 'image' && m.image?.url) {
+        return {
+          role,
+          content: [
+            { type: 'text' as const, text: '对方发来一张图片：' },
+            { type: 'image_url' as const, image_url: { url: m.image.url } },
+          ],
+        }
+      }
+      return { role, content: historyText(m) }
+    })
 
   const messages: ChatMsg[] = [{ role: 'system', content: system }, ...turns]
   const post = character.card.post_history_instructions?.trim()

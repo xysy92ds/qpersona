@@ -1,10 +1,14 @@
 import { createParser } from 'eventsource-parser'
 import type { ApiProfile } from './types'
-import { completionsEndpoint } from './util'
+import { completionsEndpoint, normalizeBaseUrl } from './util'
+
+export type ChatContent =
+  | string
+  | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>
 
 export interface ChatMsg {
   role: 'system' | 'user' | 'assistant'
-  content: string
+  content: ChatContent
 }
 
 export interface Usage {
@@ -127,6 +131,50 @@ export async function* streamChat(opts: ChatOptions): AsyncGenerator<string, voi
   } finally {
     reader.cancel().catch(() => undefined)
   }
+}
+
+function modelsEndpoint(baseUrl: string): string {
+  const base = normalizeBaseUrl(baseUrl).replace(/\/chat\/completions$/, '')
+  return `${base}/models`
+}
+
+/** 拉取这个接口下可用的模型列表 */
+export async function listModels(input: { baseUrl: string; apiKey: string }): Promise<string[]> {
+  const res = await fetch(modelsEndpoint(input.baseUrl), {
+    headers: input.apiKey ? { Authorization: `Bearer ${input.apiKey}` } : {},
+  })
+  if (!res.ok) throw await httpError(res)
+  const json = await res.json()
+  const rows = Array.isArray(json?.data) ? json.data : Array.isArray(json?.models) ? json.models : []
+  return rows
+    .map((r: any) => (typeof r === 'string' ? r : r?.id || r?.name || r?.model))
+    .filter((x: unknown): x is string => typeof x === 'string' && !!x)
+    .sort()
+}
+
+/** 用视觉模型给一张图写描述，供不支持图片的文本模型使用 */
+export async function describeImage(profile: ApiProfile, dataUrl: string): Promise<string> {
+  const res = await fetch(completionsEndpoint(profile.baseUrl), {
+    method: 'POST',
+    headers: headersOf(profile),
+    body: JSON.stringify({
+      model: profile.model,
+      stream: false,
+      temperature: 0.2,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: '用一两句话客观描述这张图片：主体、场景、可见的文字。不要评价，不要客套。' },
+            { type: 'image_url', image_url: { url: dataUrl } },
+          ],
+        },
+      ],
+    }),
+  })
+  if (!res.ok) throw await httpError(res)
+  const json = await res.json()
+  return String(json?.choices?.[0]?.message?.content ?? '').trim()
 }
 
 /** 非流式补全：记忆总结、蒸馏这类离线任务用 */

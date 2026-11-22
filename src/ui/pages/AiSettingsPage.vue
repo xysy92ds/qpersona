@@ -5,7 +5,7 @@ import { AddOutline, ChevronBack, ChevronForward, KeyOutline, TrashOutline } fro
 import BottomSheet from '@/ui/common/BottomSheet.vue'
 import { useSettingsStore } from '@/store/settings'
 import { SLOTS, type ApiProfile, type SlotId } from '@/core/types'
-import { testProfile } from '@/core/llm'
+import { listModels, testProfile } from '@/core/llm'
 import { showToast } from '@/ui/common/toast'
 
 const router = useRouter()
@@ -14,6 +14,8 @@ const settings = useSettingsStore()
 const showEditor = ref(false)
 const testing = ref(false)
 const deleting = ref(false)
+const fetchingModels = ref(false)
+const models = ref<string[]>([])
 
 const form = reactive({
   id: '',
@@ -24,6 +26,7 @@ const form = reactive({
   temperature: 0.9,
   priceIn: '',
   priceOut: '',
+  vision: false,
 })
 
 const isEdit = computed(() => !!form.id)
@@ -45,6 +48,7 @@ function openNew() {
     temperature: 0.9,
     priceIn: '',
     priceOut: '',
+    vision: false,
   })
   deleting.value = false
   showEditor.value = true
@@ -60,6 +64,7 @@ function openEdit(p: ApiProfile) {
     temperature: p.temperature ?? 0.9,
     priceIn: p.priceIn != null ? String(p.priceIn) : '',
     priceOut: p.priceOut != null ? String(p.priceOut) : '',
+    vision: !!p.vision,
   })
   deleting.value = false
   showEditor.value = true
@@ -97,6 +102,7 @@ async function save() {
     temperature: form.temperature,
     priceIn: num(form.priceIn),
     priceOut: num(form.priceOut),
+    vision: form.vision,
   }
   if (isEdit.value) await settings.updateProfile(form.id, payload)
   else await settings.addProfile(payload)
@@ -121,6 +127,26 @@ async function test() {
     showToast(`连接失败：${e instanceof Error ? e.message : String(e)}`, 3600)
   } finally {
     testing.value = false
+  }
+}
+
+async function fetchModels() {
+  if (fetchingModels.value) return
+  if (!form.baseUrl.trim()) {
+    showToast('先填 Base URL')
+    return
+  }
+  fetchingModels.value = true
+  models.value = []
+  try {
+    const list = await listModels({ baseUrl: form.baseUrl, apiKey: form.apiKey })
+    models.value = list
+    if (!list.length) showToast('接口返回了空列表，可能这个服务不支持 /models')
+    else showToast(`找到 ${list.length} 个模型，点一个填进去`)
+  } catch (e) {
+    showToast(`获取失败：${e instanceof Error ? e.message : String(e)}`, 3600)
+  } finally {
+    fetchingModels.value = false
   }
 }
 
@@ -231,9 +257,30 @@ const boundSlots = computed(() => {
         <input v-model="form.apiKey" class="input" type="password" placeholder="sk-..." autocomplete="off" />
       </label>
       <label class="field">
-        <span class="field__label">模型名</span>
+        <span class="field__label">
+          模型名
+          <button class="fetch-models" :disabled="fetchingModels" @click.prevent="fetchModels">
+            {{ fetchingModels ? '查询中…' : '获取可用模型' }}
+          </button>
+        </span>
         <input v-model="form.model" class="input" placeholder="deepseek-chat" />
       </label>
+      <div v-if="models.length" class="model-list">
+        <button
+          v-for="m in models"
+          :key="m"
+          class="model-chip"
+          :class="{ on: form.model === m }"
+          @click="form.model = m"
+        >{{ m }}</button>
+      </div>
+      <button class="vision-toggle" :class="{ on: form.vision }" @click.prevent="form.vision = !form.vision">
+        <span class="switch" :class="{ on: form.vision }" />
+        <span>
+          <b>支持图片输入</b>
+          <small>多模态模型直接看图；不支持就留空，用「图片识别」槽位写描述</small>
+        </span>
+      </button>
       <div class="price-row">
         <label class="field">
           <span class="field__label">输入单价</span>
@@ -420,6 +467,57 @@ const boundSlots = computed(() => {
 .preset:active {
   background: rgba(0, 153, 255, 0.14);
   color: var(--brand);
+}
+.fetch-models {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--brand);
+  padding: 2px 4px;
+}
+.fetch-models:disabled {
+  opacity: 0.5;
+}
+.model-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 16px 4px;
+  max-height: 128px;
+  overflow-y: auto;
+}
+.model-chip {
+  font-size: 11px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--text-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.model-chip.on {
+  background: rgba(0, 153, 255, 0.12);
+  color: var(--brand);
+}
+.vision-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: calc(100% - 32px);
+  margin: 4px 16px 2px;
+  padding: 10px 0;
+  text-align: left;
+  font-size: 13px;
+  color: var(--text);
+}
+.vision-toggle small {
+  display: block;
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 2px;
+  line-height: 1.5;
+}
+.vision-toggle .switch {
+  margin-top: 2px;
+  flex: none;
 }
 .price-row {
   display: flex;

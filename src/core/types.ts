@@ -50,6 +50,8 @@ export interface ApiProfile {
   /** 自定义单价：元 / 百万 tokens，留空则按模型名内置估算 */
   priceIn?: number
   priceOut?: number
+  /** 这个模型能不能直接看图（多模态） */
+  vision?: boolean
   createdAt: number
 }
 
@@ -164,6 +166,8 @@ export interface ImagePayload {
   url: string
   width?: number
   height?: number
+  /** 用 vision 槽位生成的图片描述 */
+  caption?: string
 }
 
 export interface VideoPayload {

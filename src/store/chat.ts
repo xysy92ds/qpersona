@@ -16,15 +16,20 @@ import type {
 import type { ChatMsg, Usage } from '@/core/llm'
 import { buildChatMessages, buildGroupMessages } from '@/core/prompt'
 import { pickSpeakers } from '@/core/group'
-import { streamChat } from '@/core/llm'
+import { describeImage, streamChat } from '@/core/llm'
 import { uid, sleep } from '@/core/util'
 import { costOf, estimateTokens, resolvePrice } from '@/core/pricing'
 import { useContactsStore } from './contacts'
 import { useMemoryStore } from './memory'
 import { useSettingsStore } from './settings'
+import { useStickersStore } from './stickers'
 
 /** AbortController 不进响应式 state，避免被 Proxy 包一层 */
 const controllers = new Map<string, AbortController>()
+
+function contentText(c: ChatMsg['content']): string {
+  return typeof c === 'string' ? c : c.map((p) => (p.type === 'text' ? p.text : '')).join('')
+}
 
 function messageText(m: Message): string {
   if (m.kind === 'sticker') return `[表情包：${m.sticker?.name ?? ''}]`
@@ -198,11 +203,12 @@ export const useChatStore = defineStore('chat', {
 
     async sendImage(convId: string, image: ImagePayload) {
       const contacts = useContactsStore()
+      const settings = useSettingsStore()
       const conv = contacts.conversationById(convId)
       if (!conv) return
       await this.load(convId)
       const list = (this.byConv[convId] ??= [])
-      const msg: Message = {
+      const msg = reactive<Message>({
         id: uid('m'),
         conversationId: convId,
         role: 'user',
@@ -211,9 +217,27 @@ export const useChatStore = defineStore('chat', {
         status: 'ok',
         kind: 'image',
         image,
-      }
+      })
       await this.pushLocal(convId, msg)
       await contacts.touch(convId, { lastText: '[图片]', lastTs: msg.ts, unread: 0 })
+
+      // 主模型不支持看图时，用「图片识别」槽位先写一句描述，文本模型靠它理解
+      const mainVision = !!settings.mainProfile?.vision
+      const visionBound = settings.bindings.vision
+      if (!mainVision && visionBound) {
+        const vp = settings.profileFor('vision')
+        if (vp) {
+          try {
+            const caption = await describeImage(vp, image.url)
+            if (caption) {
+              msg.image = { ...image, caption }
+              await putMessage(msg)
+            }
+          } catch (e) {
+            console.warn('[vision] describe failed', e)
+          }
+        }
+      }
       await this.dispatchReply(convId)
     },
 
@@ -395,7 +419,7 @@ export const useChatStore = defineStore('chat', {
         controllers.delete(convId)
       }
 
-      const promptEst = messages.reduce((n, m) => n + estimateTokens(m.content), 0)
+      const promptEst = messages.reduce((n, m) => n + estimateTokens(contentText(m.content)), 0)
       const completionEst = estimateTokens(reply.text)
       const u = apiUsage as Usage | null
       const usage = u
@@ -426,6 +450,8 @@ export const useChatStore = defineStore('chat', {
       const contacts = useContactsStore()
       const settings = useSettingsStore()
       const memory = useMemoryStore()
+      const stickerStore = useStickersStore()
+      await stickerStore.load()
       const conv = contacts.conversationById(convId)
       if (!conv) return
       const ch = contacts.characterById(conv.characterId)
@@ -490,6 +516,8 @@ export const useChatStore = defineStore('chat', {
           history,
           userName: settings.user.nickname,
           memoryText,
+          vision: !!profile.vision,
+          stickers: stickerStore.list.map((s) => ({ name: s.name, annotation: s.annotation })),
         })
       } catch (e) {
         reply.status = 'error'
@@ -530,7 +558,7 @@ export const useChatStore = defineStore('chat', {
       }
 
       // 这一轮的 token 用量：优先用接口回传的，没有就按字数估
-      const promptEst = messages.reduce((n, m) => n + estimateTokens(m.content), 0)
+      const promptEst = messages.reduce((n, m) => n + estimateTokens(contentText(m.content)), 0)
       const completionEst = estimateTokens(reply.text)
       const u = apiUsage as Usage | null
       const usage = u
@@ -544,37 +572,77 @@ export const useChatStore = defineStore('chat', {
       reply.usageEstimated = !u
       reply.cost = costOf(usage, resolvePrice(profile))
 
-      // QQ 端：把多行回复拆成连续几条气泡（设置里可关）
+      // QQ 端：把多行回复拆成连续几条气泡；[表情:名字] 会换成真的表情包
       let preview = reply.text
-      if (reply.status === 'ok' && conv.profile === 'qq' && settings.chat.autoSplit) {
-        const parts = splitBubbles(reply.text)
-        if (parts.length > 1) {
-          reply.text = parts[0]!
-          for (let i = 1; i < parts.length; i++) {
+      if (reply.status === 'ok' && conv.profile === 'qq') {
+        const rawParts = settings.chat.autoSplit ? splitBubbles(reply.text) : [reply.text]
+        const stickerList = stickerStore.list
+        const outputs = rawParts.map((part) => {
+          const m = part.match(/^\[(?:表情|表情包|sticker)[:：]\s*(.+?)\]\s*$/)
+          if (m) {
+            const st = stickerList.find((x) => x.name === m[1]!.trim())
+            if (st) return { text: '', sticker: st }
+          }
+          return { text: part }
+        })
+        const hasSticker = outputs.some((o) => o.sticker)
+        if (outputs.length > 1 || hasSticker) {
+          const first = outputs[0]!
+          if (first.sticker) {
+            reply.kind = 'sticker'
+            reply.text = ''
+            reply.sticker = {
+              id: first.sticker.id,
+              name: first.sticker.name,
+              annotation: first.sticker.annotation,
+              url: first.sticker.dataUrl,
+            }
+          } else {
+            reply.text = first.text
+          }
+          const extras: Message[] = []
+          for (let i = 1; i < outputs.length; i++) {
             await sleep(220)
-            const isLast = i === parts.length - 1
+            const o = outputs[i]!
             const extra = reactive<Message>({
               id: uid('m'),
               conversationId: convId,
               role: 'assistant',
               characterId: ch.id,
-              text: parts[i]!,
+              text: o.text,
               ts: nextTs(list),
               status: 'ok',
-              kind: 'text',
-              // 用量是整轮回复的，挂在最后一条气泡下面更自然
-              ...(isLast ? { usage: reply.usage, cost: reply.cost, usageEstimated: reply.usageEstimated } : {}),
+              kind: o.sticker ? 'sticker' : 'text',
+              ...(o.sticker
+                ? {
+                    sticker: {
+                      id: o.sticker.id,
+                      name: o.sticker.name,
+                      annotation: o.sticker.annotation,
+                      url: o.sticker.dataUrl,
+                    },
+                  }
+                : {}),
             })
             await this.pushLocal(convId, extra)
-            preview = parts[i]!
+            extras.push(extra)
           }
-          reply.usage = undefined
-          reply.cost = undefined
-          reply.usageEstimated = undefined
+          const last = extras.length ? extras[extras.length - 1]! : reply
+          if (last !== reply) {
+            last.usage = reply.usage
+            last.cost = reply.cost
+            last.usageEstimated = reply.usageEstimated
+            reply.usage = undefined
+            reply.cost = undefined
+            reply.usageEstimated = undefined
+            await putMessage(last)
+          }
+          const lastOut = outputs[outputs.length - 1]!
+          preview = lastOut.sticker ? `[表情包] ${lastOut.sticker.name}` : lastOut.text
         }
       }
 
-      if (!reply.text.trim() && reply.status === 'ok') {
+      if (!reply.text.trim() && reply.status === 'ok' && reply.kind !== 'sticker') {
         reply.status = 'error'
         reply.text = '（模型返回了空内容，检查一下模型名或参数）'
         preview = reply.text
