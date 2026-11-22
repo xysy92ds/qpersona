@@ -1,9 +1,21 @@
 import { defineStore } from 'pinia'
 import { reactive } from 'vue'
 import { db, putMessage } from '@/core/db'
-import type { CardPayload, FilePayload, Message, QuotePayload, Sticker } from '@/core/types'
+import type {
+  CardPayload,
+  Character,
+  Conversation,
+  FilePayload,
+  ImagePayload,
+  Message,
+  QuotePayload,
+  Sticker,
+  VideoPayload,
+  VoicePayload,
+} from '@/core/types'
 import type { ChatMsg, Usage } from '@/core/llm'
-import { buildChatMessages } from '@/core/prompt'
+import { buildChatMessages, buildGroupMessages } from '@/core/prompt'
+import { pickSpeakers } from '@/core/group'
 import { streamChat } from '@/core/llm'
 import { uid, sleep } from '@/core/util'
 import { costOf, estimateTokens, resolvePrice } from '@/core/pricing'
@@ -18,6 +30,7 @@ function messageText(m: Message): string {
   if (m.kind === 'sticker') return `[表情包：${m.sticker?.name ?? ''}]`
   if (m.kind === 'file') return `[文件：${m.file?.name ?? ''}]`
   if (m.kind === 'card') return `[卡片：${m.card?.title ?? ''}]`
+  if (m.kind === 'voice') return `[语音 ${Math.round(m.voice?.duration ?? 1)}″]`
   return m.text
 }
 
@@ -101,11 +114,7 @@ export const useChatStore = defineStore('chat', {
       }
       await this.pushLocal(convId, userMsg)
       await contacts.touch(convId, { lastText: text, lastTs: userMsg.ts, unread: 0 })
-      if (this.streaming[convId]) {
-        this.pendingReply[convId] = true
-        return
-      }
-      await this.respond(convId)
+      await this.dispatchReply(convId)
     },
 
     async sendSticker(convId: string, sticker: Sticker) {
@@ -131,11 +140,7 @@ export const useChatStore = defineStore('chat', {
       }
       await this.pushLocal(convId, msg)
       await contacts.touch(convId, { lastText: `[表情包] ${sticker.name}`, lastTs: msg.ts, unread: 0 })
-      if (this.streaming[convId]) {
-        this.pendingReply[convId] = true
-        return
-      }
-      await this.respond(convId)
+      await this.dispatchReply(convId)
     },
 
     async sendFile(convId: string, file: FilePayload) {
@@ -156,11 +161,7 @@ export const useChatStore = defineStore('chat', {
       }
       await this.pushLocal(convId, msg)
       await contacts.touch(convId, { lastText: `[文件] ${file.name}`, lastTs: msg.ts, unread: 0 })
-      if (this.streaming[convId]) {
-        this.pendingReply[convId] = true
-        return
-      }
-      await this.respond(convId)
+      await this.dispatchReply(convId)
     },
 
     async sendCard(convId: string, card: CardPayload) {
@@ -181,11 +182,242 @@ export const useChatStore = defineStore('chat', {
       }
       await this.pushLocal(convId, msg)
       await contacts.touch(convId, { lastText: `[卡片] ${card.title}`, lastTs: msg.ts, unread: 0 })
+      await this.dispatchReply(convId)
+    },
+
+    /** 单聊还是群聊，从这里分流 */
+    async dispatchReply(convId: string) {
       if (this.streaming[convId]) {
         this.pendingReply[convId] = true
         return
       }
-      await this.respond(convId)
+      const conv = useContactsStore().conversationById(convId)
+      if (conv?.kind === 'group') await this.respondGroup(convId)
+      else await this.respond(convId)
+    },
+
+    async sendImage(convId: string, image: ImagePayload) {
+      const contacts = useContactsStore()
+      const conv = contacts.conversationById(convId)
+      if (!conv) return
+      await this.load(convId)
+      const list = (this.byConv[convId] ??= [])
+      const msg: Message = {
+        id: uid('m'),
+        conversationId: convId,
+        role: 'user',
+        text: '',
+        ts: nextTs(list),
+        status: 'ok',
+        kind: 'image',
+        image,
+      }
+      await this.pushLocal(convId, msg)
+      await contacts.touch(convId, { lastText: '[图片]', lastTs: msg.ts, unread: 0 })
+      await this.dispatchReply(convId)
+    },
+
+    async sendVideo(convId: string, video: VideoPayload) {
+      const contacts = useContactsStore()
+      const conv = contacts.conversationById(convId)
+      if (!conv) return
+      await this.load(convId)
+      const list = (this.byConv[convId] ??= [])
+      const msg: Message = {
+        id: uid('m'),
+        conversationId: convId,
+        role: 'user',
+        text: '',
+        ts: nextTs(list),
+        status: 'ok',
+        kind: 'video',
+        video,
+      }
+      await this.pushLocal(convId, msg)
+      await contacts.touch(convId, { lastText: '[视频]', lastTs: msg.ts, unread: 0 })
+      await this.dispatchReply(convId)
+    },
+
+    async sendVoice(convId: string, voice: VoicePayload) {
+      const contacts = useContactsStore()
+      const conv = contacts.conversationById(convId)
+      if (!conv) return
+      await this.load(convId)
+      const list = (this.byConv[convId] ??= [])
+      const msg: Message = {
+        id: uid('m'),
+        conversationId: convId,
+        role: 'user',
+        text: '',
+        ts: nextTs(list),
+        status: 'ok',
+        kind: 'voice',
+        voice,
+      }
+      await this.pushLocal(convId, msg)
+      await contacts.touch(convId, { lastText: `[语音] ${Math.round(voice.duration)}″`, lastTs: msg.ts, unread: 0 })
+      await this.dispatchReply(convId)
+    },
+
+    /** 群聊：按 @ / 名字 / 兴趣挑 1~2 个人，按顺序回 */
+    async respondGroup(convId: string) {
+      if (this.streaming[convId]) {
+        this.pendingReply[convId] = true
+        return
+      }
+      const contacts = useContactsStore()
+      const settings = useSettingsStore()
+      const conv = contacts.conversationById(convId)
+      if (!conv || conv.kind !== 'group') return
+      await this.load(convId)
+      const list = this.byConv[convId] ?? []
+      const members = (conv.memberIds ?? [])
+        .map((id) => contacts.characterById(id))
+        .filter((c): c is Character => !!c && c.ext.toggles.chat)
+      if (!members.length) return
+
+      const lastUser = [...list].reverse().find((m) => m.role === 'user')
+      const text = lastUser ? messageText(lastUser) : ''
+      const speakerIds = list
+        .filter((m) => m.role === 'assistant' && m.characterId)
+        .slice(-4)
+        .map((m) => m.characterId!)
+      const spokeCounts: Record<string, number> = {}
+      for (const m of list) {
+        if (m.role === 'assistant' && m.characterId) {
+          spokeCounts[m.characterId] = (spokeCounts[m.characterId] ?? 0) + 1
+        }
+      }
+
+      const picked = pickSpeakers(members, text, {
+        lastSpeakerId: speakerIds[speakerIds.length - 1],
+        spokeCounts,
+        max: 2,
+        threshold: 15,
+      })
+      if (!picked.length) return
+
+      this.streaming[convId] = true
+      try {
+        for (const item of picked) {
+          await this.groupStream(convId, item.character, members, conv)
+          await sleep(320)
+        }
+      } finally {
+        this.streaming[convId] = false
+      }
+      if (this.pendingReply[convId]) {
+        this.pendingReply[convId] = false
+        void this.dispatchReply(convId)
+      }
+    },
+
+    async groupStream(convId: string, ch: Character, members: Character[], conv: Conversation) {
+      const contacts = useContactsStore()
+      const settings = useSettingsStore()
+      const memory = useMemoryStore()
+      const list = (this.byConv[convId] ??= [])
+      const names: Record<string, string> = {}
+      for (const m of members) names[m.id] = m.ext.qq.nickname || m.card.name
+      const displayName = names[ch.id] ?? ch.card.name
+
+      const profile = settings.profileFor('text_main', ch.ext.routing.text_main)
+      if (!profile) {
+        await this.addTip(convId, '还没有可用的文本模型，去「设置 → AI 设置」配置一下。')
+        return
+      }
+
+      const history = list.slice()
+      const query = history
+        .filter((m) => m.role === 'user')
+        .slice(-3)
+        .map((m) => messageText(m))
+        .join(' ')
+      let memoryText = ''
+      try {
+        memoryText = await memory.recall(ch.id, query)
+      } catch {
+        memoryText = ''
+      }
+
+      const reply = reactive<Message>({
+        id: uid('m'),
+        conversationId: convId,
+        role: 'assistant',
+        characterId: ch.id,
+        text: '',
+        ts: nextTs(list),
+        status: 'streaming',
+        kind: 'text',
+      })
+      list.push(reply)
+
+      const messages = buildGroupMessages({
+        character: ch,
+        members,
+        names,
+        history,
+        userName: settings.user.nickname,
+        groupName: conv.title,
+        memoryText,
+      })
+
+      const ac = new AbortController()
+      controllers.set(convId, ac)
+      let apiUsage: Usage | null = null
+      try {
+        for await (const delta of streamChat({
+          profile,
+          messages,
+          signal: ac.signal,
+          onUsage: (u) => {
+            apiUsage = u
+          },
+        })) {
+          reply.text += delta
+        }
+        reply.status = 'ok'
+      } catch (e) {
+        const aborted = ac.signal.aborted
+        const msg = e instanceof Error ? e.message : String(e)
+        reply.status = 'error'
+        reply.text = reply.text.trim() || ''
+        reply.error = msg
+        if (!aborted && !reply.text) {
+          await this.addTip(convId, `「${displayName}」没接上话：${msg}`)
+          const i = list.indexOf(reply)
+          if (i >= 0) list.splice(i, 1)
+          await db.messages.delete(reply.id)
+          controllers.delete(convId)
+          return
+        }
+      } finally {
+        controllers.delete(convId)
+      }
+
+      const promptEst = messages.reduce((n, m) => n + estimateTokens(m.content), 0)
+      const completionEst = estimateTokens(reply.text)
+      const u = apiUsage as Usage | null
+      const usage = u
+        ? {
+            prompt: u.prompt_tokens ?? promptEst,
+            completion: u.completion_tokens ?? completionEst,
+            total: u.total_tokens ?? (u.prompt_tokens ?? promptEst) + (u.completion_tokens ?? completionEst),
+          }
+        : { prompt: promptEst, completion: completionEst, total: promptEst + completionEst }
+      reply.usage = usage
+      reply.usageEstimated = !u
+      reply.cost = costOf(usage, resolvePrice(profile))
+
+      if (!reply.text.trim()) {
+        reply.status = 'error'
+        reply.text = '（这句没生成出来）'
+      }
+      await putMessage(reply)
+      await contacts.touch(convId, {
+        lastText: `${displayName}：${reply.text.slice(0, 60)}`,
+        lastTs: Date.now(),
+      })
     },
 
     /** 真正调用模型、流式写回回复的那一段 */

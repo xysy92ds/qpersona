@@ -5,6 +5,7 @@ import { ChevronBack, EllipsisHorizontal, VolumeHighOutline, VolumeMuteOutline }
 import MessageItem from './MessageItem.vue'
 import Composer from './Composer.vue'
 import BottomSheet from '@/ui/common/BottomSheet.vue'
+import Avatar from '@/ui/common/Avatar.vue'
 import { useContactsStore } from '@/store/contacts'
 import { useChatStore } from '@/store/chat'
 import { useSettingsStore } from '@/store/settings'
@@ -12,7 +13,16 @@ import { avatarSvg, characterAvatar } from '@/core/avatar'
 import { chatTime } from '@/core/util'
 import { showToast } from '@/ui/common/toast'
 import { ping } from '@/core/audio'
-import type { CardPayload, FilePayload, Message, QuotePayload, Sticker } from '@/core/types'
+import type {
+  CardPayload,
+  FilePayload,
+  ImagePayload,
+  Message,
+  QuotePayload,
+  Sticker,
+  VideoPayload,
+  VoicePayload,
+} from '@/core/types'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -56,6 +66,20 @@ const sheet = ref(false)
 const msgMenu = ref(false)
 const activeMsg = ref<Message | null>(null)
 const quoting = ref<QuotePayload | null>(null)
+const previewUrl = ref('')
+const membersOpen = ref(false)
+
+const members = computed(() =>
+  (conv.value?.memberIds ?? [])
+    .map((id) => contacts.characterById(id))
+    .filter((m): m is NonNullable<typeof m> => !!m),
+)
+
+const mentionNames = computed(() =>
+  conv.value?.kind === 'group'
+    ? members.value.map((m) => m.ext.qq.nickname || m.card.name)
+    : [],
+)
 const msgConfirm = ref(false)
 let armed = false
 const spoken = new Set<string>()
@@ -135,6 +159,21 @@ async function sendFile(file: FilePayload) {
 async function sendCard(card: CardPayload) {
   stick.value = true
   await chat.sendCard(props.id, card)
+}
+
+async function sendImage(image: ImagePayload) {
+  stick.value = true
+  await chat.sendImage(props.id, image)
+}
+
+async function sendVideo(video: VideoPayload) {
+  stick.value = true
+  await chat.sendVideo(props.id, video)
+}
+
+async function sendVoice(voice: VoicePayload) {
+  stick.value = true
+  await chat.sendVoice(props.id, voice)
 }
 
 function quoteMessage() {
@@ -245,13 +284,20 @@ async function poke() {
   if (!conv.value) return
   await chat.addTip(props.id, `你拍了拍「${title.value}」`)
 }
+
+async function pokeBy(name: string) {
+  await chat.addTip(props.id, `你拍了拍「${name}」`)
+}
 </script>
 
 <template>
   <div v-if="conv" class="chat">
     <header class="topbar chat-head">
       <button class="iconbtn" aria-label="返回" @click="goBack"><ChevronBack /></button>
-      <div class="chat-head__title" @click="ch && router.push(`/character/${ch.id}`)">
+      <div
+        class="chat-head__title"
+        @click="ch ? router.push(`/character/${ch.id}`) : (membersOpen = true)"
+      >
         <div class="topbar__title">{{ title }}</div>
         <div class="topbar__sub">{{ subtitle }}</div>
       </div>
@@ -285,6 +331,8 @@ async function poke() {
           :user-avatar="userAvatar"
           :show-usage="settings.chat.showUsage"
           @longpress="openMsgMenu"
+          @poke="pokeBy"
+          @preview="previewUrl = $event"
         />
       </template>
       <div class="chat-list__pad" />
@@ -293,14 +341,39 @@ async function poke() {
     <Composer
       :streaming="streaming"
       :quote="quoting"
+      :mention-names="mentionNames"
       @send="send"
       @stop="chat.stop(props.id)"
       @poke="poke"
       @sticker="sendSticker"
       @file="sendFile"
       @card="sendCard"
+      @image="sendImage"
+      @video="sendVideo"
+      @voice="sendVoice"
       @close-quote="quoting = null"
     />
+
+    <Transition name="fade">
+      <div v-if="previewUrl" class="img-viewer" @click="previewUrl = ''">
+        <img :src="previewUrl" alt="预览" />
+      </div>
+    </Transition>
+
+    <BottomSheet v-model="membersOpen" :title="`群成员 · ${members.length}`">
+      <button
+        v-for="m in members"
+        :key="m.id"
+        class="cell"
+        @click="membersOpen = false; router.push(`/character/${m.id}`)"
+      >
+        <Avatar :name="m.card.name" :src="m.ext.qq.avatar" :size="40" />
+        <span class="cell__body">
+          <span class="cell__title">{{ m.ext.qq.nickname || m.card.name }}</span>
+          <span class="cell__desc">{{ m.ext.qq.signature || m.card.tags?.join(' · ') || '群成员' }}</span>
+        </span>
+      </button>
+    </BottomSheet>
 
     <BottomSheet v-model="msgMenu" title="消息">
       <button class="cell" @click="quoteMessage">
@@ -331,13 +404,23 @@ async function poke() {
     </BottomSheet>
 
     <BottomSheet v-model="sheet" title="聊天设置">
+      <button v-if="conv.kind === 'group'" class="cell" @click="sheet = false; membersOpen = true">
+        <span class="cell__body">
+          <span class="cell__title">群成员（{{ members.length }}）</span>
+          <span class="cell__desc">看看这个群里都有谁</span>
+        </span>
+      </button>
       <button class="cell" @click="regenerate">
         <span class="cell__body">
           <span class="cell__title">重新生成</span>
           <span class="cell__desc">把最后一条回复重写一遍</span>
         </span>
       </button>
-      <button v-if="ch" class="cell" @click="switchProfile(conv.profile === 'qq' ? 'tavern' : 'qq')">
+      <button
+        v-if="ch && conv.kind === 'single'"
+        class="cell"
+        @click="switchProfile(conv.profile === 'qq' ? 'tavern' : 'qq')"
+      >
         <span class="cell__body">
           <span class="cell__title">{{ conv.profile === 'qq' ? '切到酒馆里继续' : '切回 QQ 聊天' }}</span>
           <span class="cell__desc">
@@ -345,7 +428,11 @@ async function poke() {
           </span>
         </span>
       </button>
-      <button v-if="ch" class="cell" @click="sheet = false; router.push(`/character/${ch.id}`)">
+      <button
+        v-if="ch && conv.kind === 'single'"
+        class="cell"
+        @click="sheet = false; router.push(`/character/${ch.id}`)"
+      >
         <span class="cell__body">
           <span class="cell__title">角色资料</span>
           <span class="cell__desc">查看设定、开关和提示词</span>
@@ -410,6 +497,25 @@ async function poke() {
 }
 .chat-list__pad {
   height: 10px;
+}
+.chat {
+  position: relative;
+}
+.img-viewer {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  background: rgba(5, 8, 12, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+.img-viewer img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 6px;
 }
 .notfound {
   flex: 1;

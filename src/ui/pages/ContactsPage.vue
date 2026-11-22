@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { AddOutline, PeopleOutline, PersonAddOutline, SearchOutline } from '@vicons/ionicons5'
 import Avatar from '@/ui/common/Avatar.vue'
 import { useContactsStore } from '@/store/contacts'
-import { showToast } from '@/ui/common/toast'
 
 const router = useRouter()
 const contacts = useContactsStore()
@@ -33,13 +32,13 @@ const list = computed(() => contacts.characters)
           </div>
           <span class="cell__value">去添加</span>
         </button>
-        <button class="cell" @click="showToast('群聊 · 下个版本见')">
+        <button class="cell" @click="router.push('/group/new')">
           <div class="cell-icon" style="background: #34c759"><PeopleOutline /></div>
           <div class="cell__body">
-            <div class="cell__title">群聊</div>
+            <div class="cell__title">发起群聊</div>
             <div class="cell__desc">把多个 AI 角色拉进一个群</div>
           </div>
-          <span class="cell__value">即将推出</span>
+          <span class="cell__value">去创建</span>
         </button>
       </div>
 

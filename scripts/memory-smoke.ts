@@ -101,10 +101,13 @@ const cardMsg: any = {
   sticker: undefined,
   card: { title: '周末的展', description: '三点在美术馆门口见', url: 'https://example.com/expo' },
 }
+const imageMsg: any = { ...stickerMsg, id: 'm_img', kind: 'image', sticker: undefined, image: { url: 'data:image/png;base64,x' } }
+const videoMsg: any = { ...stickerMsg, id: 'm_vid', kind: 'video', sticker: undefined, video: { url: 'data:video/webm;base64,x', name: '片段.webm', size: 1000 } }
+const voiceMsg: any = { ...stickerMsg, id: 'm_voice', kind: 'voice', sticker: undefined, voice: { url: 'data:audio/webm;base64,x', duration: 3.4, mime: 'audio/webm', size: 500 } }
 const built = buildChatMessages({
   character: ch,
   profile: 'qq',
-  history: [stickerMsg, fileMsg, quoteMsg, cardMsg],
+  history: [stickerMsg, fileMsg, quoteMsg, cardMsg, imageMsg, videoMsg, voiceMsg],
   userName: '我',
   memoryText: recalled,
 })
@@ -114,5 +117,6 @@ console.log('6) file->prompt:', JSON.stringify(contents[1]))
 console.log('7) quote->prompt:', JSON.stringify(contents[2]))
 console.log('8) memory injected:', built[0]!.content.includes('对方喜欢雨天'))
 console.log('9) card->prompt:', JSON.stringify(contents[3]))
+console.log('10) media->prompt:', JSON.stringify(contents.slice(4)))
 
 server.close()

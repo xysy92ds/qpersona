@@ -164,6 +164,36 @@ export const useContactsStore = defineStore('contacts', {
       if (conv) await this.touch(conversationId, { pinned: !conv.pinned })
     },
 
+    /** 建群：成员至少两个（UI 会校验），先落一条说明消息 */
+    async createGroup(memberIds: string[], title: string): Promise<Conversation> {
+      const now = Date.now()
+      const clean = [...new Set(memberIds)].filter((id) => !!this.characterById(id))
+      const conv: Conversation = {
+        id: uid('conv'),
+        kind: 'group',
+        profile: 'qq',
+        title: title.trim() || '新群聊',
+        memberIds: clean,
+        lastText: '群聊已创建',
+        lastTs: now,
+        unread: 0,
+        pinned: false,
+        createdAt: now,
+      }
+      await putConversation(conv)
+      this.conversations.push(conv)
+      await putMessage({
+        id: uid('m'),
+        conversationId: conv.id,
+        role: 'system',
+        text: '群聊已创建。试试 @ 某个成员，或者提到他们感兴趣的事——没人被叫到的时候，群里会保持安静。',
+        ts: now,
+        status: 'ok',
+        kind: 'tip',
+      })
+      return conv
+    },
+
     async removeConversation(conversationId: string) {
       await db.transaction('rw', db.conversations, db.messages, async () => {
         await db.conversations.delete(conversationId)

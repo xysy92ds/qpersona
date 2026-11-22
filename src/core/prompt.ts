@@ -118,6 +118,9 @@ export function historyText(m: Message): string {
     return `[表情包：${name}${note}]`
   }
   if (m.kind === 'file') return `[文件：${m.file?.name ?? '未命名文件'}]`
+  if (m.kind === 'image') return '[图片]'
+  if (m.kind === 'video') return `[视频：${m.video?.name ?? '视频'}]`
+  if (m.kind === 'voice') return `[语音 ${Math.max(1, Math.round(m.voice?.duration ?? 1))}″]`
   if (m.kind === 'card') {
     const c = m.card
     if (!c) return '[卡片]'
@@ -147,7 +150,13 @@ export function buildChatMessages(args: BuildArgs): ChatMsg[] {
       (m) =>
         m.kind !== 'tip' &&
         m.role !== 'system' &&
-        (m.text.trim() || m.kind === 'sticker' || m.kind === 'file' || m.kind === 'card'),
+        (m.text.trim() ||
+          m.kind === 'sticker' ||
+          m.kind === 'file' ||
+          m.kind === 'card' ||
+          m.kind === 'image' ||
+          m.kind === 'video' ||
+          m.kind === 'voice'),
     )
     .slice(-HISTORY_LIMIT[profile])
     .map<ChatMsg>((m) => ({
@@ -166,4 +175,75 @@ export function greetingFor(character: Character, index = 0): string {
   const alts = c.alternate_greetings ?? []
   if (index > 0 && alts[index - 1]) return alts[index - 1]
   return c.first_mes || ''
+}
+
+
+export interface GroupBuildArgs {
+  character: Character
+  members: Character[]
+  /** characterId -> 群里显示的名字 */
+  names: Record<string, string>
+  history: Message[]
+  userName: string
+  groupName: string
+  memoryText?: string
+}
+
+/**
+ * 群聊走单独一套请求：系统提示词里放群规和成员，历史压成一份「群聊记录」。
+ * 多个 AI 角色轮转时，OpenAI 的 user/assistant 二分角色表达不了多人对话，
+ * 所以这里用一份点名记录 + 一个明确的「现在轮到你」指令。
+ */
+export function buildGroupMessages(args: GroupBuildArgs): ChatMsg[] {
+  const { character: c, members, names, history, userName, groupName, memoryText } = args
+  const others = members
+    .filter((m) => m.id !== c.id)
+    .map((m) => `${m.card.name}${m.ext.qq.nickname && m.ext.qq.nickname !== m.card.name ? `（${m.ext.qq.nickname}）` : ''}`)
+    .join('、')
+  const example = cleanExample(c.card.mes_example, c, userName)
+
+  const system = `你在一个 QQ 群里聊天，群名「${groupName}」。你就是「${c.card.name}」本人，不是 AI、不是助手，也不在写小说。
+
+# 群聊规则
+- 群里还有：${others || '（暂时只有你）'}，以及「${userName}」。
+- 一次发 1~2 条，每条 3~25 字；想分条就换行，每条单独一行，不要编号。
+- 可以附和、可以怼、可以只回一两个字；不要每句都接最后一个人。
+- 不要复述别人刚说过的话，不要列一二三，不要在结尾总结、鼓励或上价值。
+- 不写旁白、动作、神态、括号、星号、Markdown、小标题。
+- 不用「作为一个 AI」「我理解你的感受」「希望有帮助」这类腔调；不要每句都反问。
+- 你只知道自己看到的消息，不替别人编经历，也不读心。
+
+# 人物
+姓名：${c.card.name}
+身份与设定：${c.card.description || '（未填写）'}
+性格：${c.card.personality || '（未填写）'}
+${c.card.tags?.length ? `标签：${c.card.tags.join('、')}` : ''}
+${example ? `\n# 说话的参考（学语气，不要照抄）\n${example}\n` : ''}${memoryBlock(memoryText)}`
+
+  const lines = history
+    .filter(
+      (m) =>
+        m.kind !== 'tip' &&
+        m.role !== 'system' &&
+        (m.text.trim() ||
+          m.kind === 'sticker' ||
+          m.kind === 'file' ||
+          m.kind === 'card' ||
+          m.kind === 'image' ||
+          m.kind === 'video' ||
+          m.kind === 'voice'),
+    )
+    .slice(-30)
+    .map((m) => {
+      const who = m.role === 'user' ? userName : names[m.characterId ?? ''] || c.card.name
+      return `${who}：${historyText(m)}`
+    })
+
+  return [
+    { role: 'system', content: system },
+    {
+      role: 'user',
+      content: `【最近的群聊】\n${lines.join('\n')}\n\n（你是${c.card.name}，现在接着聊。只输出你要发的内容，不要写自己的名字，不要复述别人。）`,
+    },
+  ]
 }

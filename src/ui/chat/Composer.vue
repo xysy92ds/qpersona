@@ -4,17 +4,37 @@ import { useRouter } from 'vue-router'
 import {
   AddCircleOutline,
   AddOutline,
+  AtOutline,
+  CallOutline,
   CloseOutline,
+  DocumentAttachOutline,
   HappyOutline,
+  ImagesOutline,
+  LinkOutline,
   MicOutline,
   StopCircleOutline,
+  VideocamOutline,
 } from '@vicons/ionicons5'
 import BottomSheet from '@/ui/common/BottomSheet.vue'
 import { showToast } from '@/ui/common/toast'
+import { imageToDataUrl } from '@/core/util'
 import { useStickersStore } from '@/store/stickers'
-import type { CardPayload, FilePayload, QuotePayload, Sticker } from '@/core/types'
+import type {
+  CardPayload,
+  FilePayload,
+  ImagePayload,
+  QuotePayload,
+  Sticker,
+  VideoPayload,
+  VoicePayload,
+} from '@/core/types'
 
-const props = defineProps<{ disabled?: boolean; streaming?: boolean; quote?: QuotePayload | null }>()
+const props = defineProps<{
+  disabled?: boolean
+  streaming?: boolean
+  quote?: QuotePayload | null
+  mentionNames?: string[]
+}>()
 const emit = defineEmits<{
   send: [string]
   stop: []
@@ -22,6 +42,9 @@ const emit = defineEmits<{
   sticker: [Sticker]
   file: [FilePayload]
   card: [CardPayload]
+  image: [ImagePayload]
+  video: [VideoPayload]
+  voice: [VoicePayload]
   closeQuote: []
 }>()
 
@@ -33,11 +56,22 @@ const area = ref<HTMLTextAreaElement>()
 const panel = ref<'emoji' | 'sticker' | null>(null)
 const moreOpen = ref(false)
 const cardOpen = ref(false)
+const mentionOpen = ref(false)
 const listening = ref(false)
+const recording = ref(false)
+const recordSeconds = ref(0)
 const card = ref({ title: '', url: '', description: '' })
 const fileInput = ref<HTMLInputElement>()
+const imageInput = ref<HTMLInputElement>()
+const videoInput = ref<HTMLInputElement>()
 
 let rec: any = null
+let recorder: MediaRecorder | null = null
+let recChunks: BlobPart[] = []
+let recStream: MediaStream | null = null
+let recStart = 0
+let recTimer: number | null = null
+let cancelRecorded = false
 
 const EMOJIS = [
   '😀', '😄', '😁', '😆', '🥹', '😊', '🙂', '😉',
@@ -75,16 +109,63 @@ function onKey(e: KeyboardEvent) {
   }
 }
 
-function pickEmoji(e: string) {
+function insertText(s: string) {
   const el = area.value
   const start = el?.selectionStart ?? text.value.length
   const end = el?.selectionEnd ?? text.value.length
-  text.value = text.value.slice(0, start) + e + text.value.slice(end)
+  text.value = text.value.slice(0, start) + s + text.value.slice(end)
   nextTick(() => {
     el?.focus()
-    el?.setSelectionRange(start + e.length, start + e.length)
+    el?.setSelectionRange(start + s.length, start + s.length)
     resize()
   })
+}
+
+function pickEmoji(e: string) {
+  insertText(e)
+}
+
+function pickMention(name: string) {
+  insertText(`@${name} `)
+  mentionOpen.value = false
+}
+
+function openMention() {
+  moreOpen.value = false
+  mentionOpen.value = true
+}
+
+async function onImage(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  try {
+    const url = await imageToDataUrl(file, 1280)
+    emit('image', { url })
+    moreOpen.value = false
+  } catch {
+    showToast('这张图读不出来，换一张试试')
+  }
+}
+
+async function onVideo(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  if (file.size > 8 * 1024 * 1024) {
+    showToast('视频别超过 8MB')
+    return
+  }
+  const url = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+  emit('video', { url, name: file.name, size: file.size })
+  moreOpen.value = false
 }
 
 function pickSticker(s: Sticker) {
@@ -134,8 +215,9 @@ async function onFile(e: Event) {
   moreOpen.value = false
 }
 
-/** 语音输入：用浏览器自带的识别能力，没有就直说 */
-function toggleVoice() {
+/** 语音转文字：用浏览器自带的识别能力，没有就直说 */
+function startSpeech() {
+  moreOpen.value = false
   if (listening.value && rec) {
     rec.stop()
     return
@@ -167,12 +249,111 @@ function toggleVoice() {
   showToast('正在听…说完会自动填进来')
 }
 
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+function cleanupRecord() {
+  if (recTimer) window.clearInterval(recTimer)
+  recTimer = null
+  recStream?.getTracks().forEach((t) => t.stop())
+  recStream = null
+  recorder = null
+  recChunks = []
+  recording.value = false
+  recordSeconds.value = 0
+}
+
+async function toggleRecord() {
+  if (recording.value) {
+    cancelRecorded = false
+    try {
+      recorder?.stop()
+    } catch {
+      cleanupRecord()
+    }
+    return
+  }
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    showToast('这个浏览器不支持录音')
+    return
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    const mime =
+      ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((t) =>
+        MediaRecorder.isTypeSupported(t),
+      ) || ''
+    const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined)
+    cancelRecorded = false
+    recChunks = []
+    mr.ondataavailable = (e) => {
+      if (e.data.size) recChunks.push(e.data)
+    }
+    mr.onstop = async () => {
+      const blob = new Blob(recChunks, { type: mr.mimeType || 'audio/webm' })
+      const duration = Math.max(0.5, (Date.now() - recStart) / 1000)
+      const cancelled = cancelRecorded
+      cleanupRecord()
+      if (cancelled || !blob.size) return
+      try {
+        const url = await blobToDataUrl(blob)
+        emit('voice', { url, duration, mime: blob.type, size: blob.size })
+      } catch {
+        showToast('录音保存失败')
+      }
+    }
+    recStream = stream
+    recorder = mr
+    recStart = Date.now()
+    recording.value = true
+    recordSeconds.value = 0
+    mr.start()
+    recTimer = window.setInterval(() => {
+      recordSeconds.value = Math.floor((Date.now() - recStart) / 1000)
+    }, 250)
+  } catch {
+    showToast('没有麦克风权限，或浏览器不支持录音')
+    cleanupRecord()
+  }
+}
+
+function sendRecording() {
+  cancelRecorded = false
+  try {
+    recorder?.stop()
+  } catch {
+    cleanupRecord()
+  }
+}
+
+function cancelRecording() {
+  cancelRecorded = true
+  try {
+    recorder?.stop()
+  } catch {
+    cleanupRecord()
+  }
+}
+
 onUnmounted(() => {
   try {
     rec?.stop()
   } catch {
     /* ignore */
   }
+  cancelRecorded = true
+  try {
+    recorder?.stop()
+  } catch {
+    /* ignore */
+  }
+  cleanupRecord()
 })
 
 watch(text, () => nextTick(resize))
@@ -180,6 +361,13 @@ watch(text, () => nextTick(resize))
 
 <template>
   <div class="composer">
+    <div v-if="recording" class="recording">
+      <span class="recording__dot" />
+      <span class="recording__text">正在录音 {{ recordSeconds }}s</span>
+      <button class="recording__btn" @click="cancelRecording">取消</button>
+      <button class="recording__btn recording__btn--send" @click="sendRecording">发送</button>
+    </div>
+
     <div v-if="quote" class="quote-bar">
       <div class="quote-bar__body">
         <span class="quote-bar__name">{{ quote.name }}</span>
@@ -215,7 +403,12 @@ watch(text, () => nextTick(resize))
     </div>
 
     <div class="bar">
-      <button class="cbtn" :class="{ active: listening }" aria-label="语音输入" @click="toggleVoice">
+      <button
+        class="cbtn"
+        :class="{ active: recording }"
+        aria-label="录音"
+        @click="toggleRecord"
+      >
         <MicOutline />
       </button>
       <div class="field-wrap">
@@ -245,32 +438,53 @@ watch(text, () => nextTick(resize))
 
     <BottomSheet v-model="moreOpen" title="更多">
       <div class="more-grid">
-        <button class="more-item" @click="moreOpen = false; emit('poke')">
-          <span class="more-item__icon" style="background: #f59e0b">👋</span>
-          <span>拍一拍</span>
+        <button class="more-item" @click="imageInput?.click()">
+          <span class="more-item__icon" style="background: #e8f2ff; color: #2b7fff"><ImagesOutline /></span>
+          <span>图片</span>
+        </button>
+        <button class="more-item" @click="videoInput?.click()">
+          <span class="more-item__icon" style="background: #ffeef0; color: #ff4d6a"><VideocamOutline /></span>
+          <span>视频</span>
         </button>
         <button class="more-item" @click="fileInput?.click()">
-          <span class="more-item__icon" style="background: #8b5cf6">📎</span>
+          <span class="more-item__icon" style="background: #f3e9ff; color: #8b5cf6"><DocumentAttachOutline /></span>
           <span>文件</span>
         </button>
         <button class="more-item" @click="openCardForm">
-          <span class="more-item__icon" style="background: #0ea5e9">📇</span>
+          <span class="more-item__icon" style="background: #e6f7ff; color: #0891b2"><LinkOutline /></span>
           <span>卡片</span>
         </button>
-        <button class="more-item" @click="moreOpen = false; showToast('图片消息 · 下次做')">
-          <span class="more-item__icon" style="background: #e11d48">🖼️</span>
-          <span>图片</span>
-          <em>即将推出</em>
+        <button class="more-item" @click="startSpeech">
+          <span class="more-item__icon" style="background: #eef2ff; color: #4f46e5"><MicOutline /></span>
+          <span>语音转文字</span>
+        </button>
+        <button v-if="mentionNames?.length" class="more-item" @click="openMention">
+          <span class="more-item__icon" style="background: #fff4e6; color: #f59e0b"><AtOutline /></span>
+          <span>提到成员</span>
         </button>
         <button class="more-item" @click="moreOpen = false; showToast('语音通话 · Phase 4')">
-          <span class="more-item__icon" style="background: #22c55e">📞</span>
+          <span class="more-item__icon" style="background: #e8f8ee; color: #22c55e"><CallOutline /></span>
           <span>语音通话</span>
           <em>即将推出</em>
         </button>
       </div>
+      <div class="more-hint">双击对方头像可以拍一拍</div>
+    </BottomSheet>
+
+    <BottomSheet v-model="mentionOpen" title="提到成员">
+      <button
+        v-for="name in mentionNames"
+        :key="name"
+        class="cell"
+        @click="pickMention(name)"
+      >
+        <span class="cell__body"><span class="cell__title">@{{ name }}</span></span>
+      </button>
     </BottomSheet>
 
     <input ref="fileInput" type="file" hidden @change="onFile" />
+    <input ref="imageInput" type="file" accept="image/*" hidden @change="onImage" />
+    <input ref="videoInput" type="file" accept="video/*" hidden @change="onVideo" />
 
     <BottomSheet v-model="cardOpen" title="发送链接卡片">
       <label class="field">
@@ -299,6 +513,43 @@ watch(text, () => nextTick(resize))
   background: var(--bg-sheet);
   border-top: 0.5px solid var(--line);
   z-index: 10;
+}
+.recording {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 12px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 59, 48, 0.08);
+}
+.recording__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff3b30;
+  animation: rec-blink 1s infinite;
+}
+@keyframes rec-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+.recording__text {
+  flex: 1;
+  font-size: 12px;
+  color: #d93025;
+}
+.recording__btn {
+  font-size: 12px;
+  color: var(--text-2);
+  padding: 4px 8px;
+  border-radius: 7px;
+  background: var(--bg-hover);
+}
+.recording__btn--send {
+  background: var(--brand);
+  color: #fff;
 }
 .quote-bar {
   display: flex;
@@ -458,6 +709,10 @@ watch(text, () => nextTick(resize))
   color: var(--brand);
   background: rgba(0, 153, 255, 0.1);
 }
+.cbtn.active[aria-label='录音'] {
+  color: #ff3b30;
+  background: rgba(255, 59, 48, 0.1);
+}
 .cbtn svg {
   width: 24px;
   height: 24px;
@@ -528,10 +783,19 @@ watch(text, () => nextTick(resize))
 .more-item__icon {
   width: 52px;
   height: 52px;
-  border-radius: 14px;
+  border-radius: 16px;
   display: grid;
   place-items: center;
-  font-size: 24px;
+}
+.more-item__icon svg {
+  width: 25px;
+  height: 25px;
+}
+.more-hint {
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--text-3);
+  padding: 0 0 14px;
 }
 .more-item em {
   font-style: normal;

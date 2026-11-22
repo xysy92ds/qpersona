@@ -143,7 +143,7 @@ export interface Conversation {
 
 export type MsgRole = 'user' | 'assistant' | 'system'
 export type MsgStatus = 'ok' | 'streaming' | 'error'
-export type MsgKind = 'text' | 'tip' | 'sticker' | 'file' | 'card'
+export type MsgKind = 'text' | 'tip' | 'sticker' | 'file' | 'card' | 'image' | 'video' | 'voice'
 
 export interface StickerPayload {
   id: string
@@ -158,6 +158,26 @@ export interface FilePayload {
   size: number
   mime: string
   url: string
+}
+
+export interface ImagePayload {
+  url: string
+  width?: number
+  height?: number
+}
+
+export interface VideoPayload {
+  url: string
+  name: string
+  size: number
+}
+
+export interface VoicePayload {
+  url: string
+  /** 秒 */
+  duration: number
+  mime: string
+  size: number
 }
 
 export interface CardPayload {
@@ -190,6 +210,12 @@ export interface Message {
   file?: FilePayload
   /** 链接卡片消息 */
   card?: CardPayload
+  /** 图片消息 */
+  image?: ImagePayload
+  /** 视频消息 */
+  video?: VideoPayload
+  /** 语音消息 */
+  voice?: VoicePayload
   /** 引用某条消息 */
   quote?: QuotePayload
   error?: string

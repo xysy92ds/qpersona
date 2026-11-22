@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { QText } from 'fake-qq-ui'
 import type { Message } from '@/core/types'
 import { avatarSvg } from '@/core/avatar'
 import { usageLabel } from '@/core/pricing'
+import { PauseOutline, PlayOutline } from '@vicons/ionicons5'
 
 const props = defineProps<{
   message: Message
@@ -24,6 +25,57 @@ const usageText = computed(() => usageLabel(props.message))
 const isSticker = computed(() => props.message.kind === 'sticker')
 const isFile = computed(() => props.message.kind === 'file')
 const isCard = computed(() => props.message.kind === 'card')
+const isImage = computed(() => props.message.kind === 'image')
+const isVideo = computed(() => props.message.kind === 'video')
+const isVoice = computed(() => props.message.kind === 'voice')
+const playing = ref(false)
+let audio: HTMLAudioElement | null = null
+
+const voiceSeconds = computed(() => Math.max(1, Math.round(props.message.voice?.duration ?? 1)))
+const voiceWidth = computed(() => Math.min(220, 108 + voiceSeconds.value * 7))
+
+function toggleVoicePlayback() {
+  const url = props.message.voice?.url
+  if (!url) return
+  if (!audio) {
+    audio = new Audio(url)
+    audio.onended = () => {
+      playing.value = false
+    }
+    audio.onerror = () => {
+      playing.value = false
+    }
+  }
+  if (playing.value) {
+    audio.pause()
+    playing.value = false
+  } else {
+    void audio.play().then(() => {
+      playing.value = true
+    }).catch(() => {
+      playing.value = false
+    })
+  }
+}
+
+onUnmounted(() => {
+  audio?.pause()
+})
+
+let lastAvatarTap = 0
+
+function onRowClick(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (!target.closest('.qq-message__avatar-span')) return
+  if (isSelf.value) return
+  const now = Date.now()
+  if (now - lastAvatarTap < 320) {
+    lastAvatarTap = 0
+    emit('poke', props.characterName)
+  } else {
+    lastAvatarTap = now
+  }
+}
 
 function hostOf(url: string): string {
   try {
@@ -40,7 +92,7 @@ function formatSize(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
-const emit = defineEmits<{ longpress: [Message] }>()
+const emit = defineEmits<{ longpress: [Message]; poke: [string]; preview: [string] }>()
 let timer: number | null = null
 let startX = 0
 let startY = 0
@@ -72,15 +124,17 @@ function move(e: PointerEvent) {
     :class="{
       'msg--self': isSelf,
       'msg--error': message.status === 'error',
-      'msg--hide-name': !showName,
+      'msg--hide-name': !showName || isSelf,
       'msg--sticker': isSticker,
       'msg--card': isCard,
+      'msg--media': isImage || isVideo,
     }"
     @pointerdown="down"
     @pointerup="cancel"
     @pointerleave="cancel"
     @pointermove="move"
     @contextmenu.prevent="emit('longpress', message)"
+    @click="onRowClick"
   >
     <QText :self="isSelf" :name="name" :avatar="avatar">
       <div v-if="isSticker && message.sticker" class="sticker-wrap">
@@ -94,7 +148,38 @@ function move(e: PointerEvent) {
         </div>
 
         <a
-          v-if="isCard && message.card"
+          v-if="isImage && message.image"
+          class="media-link"
+          @click.prevent="emit('preview', message.image.url)"
+        >
+          <img class="chat-image" :src="message.image.url" alt="图片" draggable="false" />
+        </a>
+
+        <button
+          v-else-if="isVoice && message.voice"
+          class="voice-bubble"
+          :class="{ playing }"
+          :style="{ width: voiceWidth + 'px' }"
+          @click.stop="toggleVoicePlayback"
+        >
+          <span class="voice-bubble__icon">
+            <PauseOutline v-if="playing" />
+            <PlayOutline v-else />
+          </span>
+          <span class="voice-bubble__wave"><i /><i /><i /><i /><i /></span>
+          <span class="voice-bubble__dur">{{ voiceSeconds }}″</span>
+        </button>
+
+        <video
+          v-else-if="isVideo && message.video"
+          class="chat-video"
+          :src="message.video.url"
+          controls
+          preload="metadata"
+        />
+
+        <a
+          v-else-if="isCard && message.card"
           class="link-card"
           :href="message.card.url"
           target="_blank"
@@ -216,6 +301,113 @@ function move(e: PointerEvent) {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 200px;
+}
+.msg--media :deep(.msg-content-container) {
+  background: transparent !important;
+  padding: 0 !important;
+}
+.msg--media :deep(.mix-message__container) {
+  padding: 0 !important;
+}
+.msg--media :deep(.message-content) {
+  padding: 0;
+}
+.media-link {
+  display: block;
+  line-height: 0;
+  text-decoration: none;
+}
+.chat-image {
+  display: block;
+  max-width: 200px;
+  max-height: 260px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--bg);
+}
+.voice-bubble {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 96px;
+  max-width: 220px;
+  padding: 2px 0;
+  color: inherit;
+}
+.voice-bubble__icon {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.voice-bubble__icon svg {
+  width: 18px;
+  height: 18px;
+}
+.voice-bubble__wave {
+  display: flex;
+  align-items: center;
+  gap: 2.5px;
+  flex: 1;
+  height: 20px;
+}
+.voice-bubble__wave i {
+  width: 2.5px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.55;
+  height: 8px;
+}
+.voice-bubble__wave i:nth-child(2) {
+  height: 13px;
+}
+.voice-bubble__wave i:nth-child(3) {
+  height: 18px;
+}
+.voice-bubble__wave i:nth-child(4) {
+  height: 12px;
+}
+.voice-bubble__wave i:nth-child(5) {
+  height: 7px;
+}
+.voice-bubble.playing .voice-bubble__wave i {
+  animation: voice-wave 0.9s ease-in-out infinite;
+  opacity: 0.9;
+}
+.voice-bubble.playing .voice-bubble__wave i:nth-child(2) {
+  animation-delay: 0.12s;
+}
+.voice-bubble.playing .voice-bubble__wave i:nth-child(3) {
+  animation-delay: 0.24s;
+}
+.voice-bubble.playing .voice-bubble__wave i:nth-child(4) {
+  animation-delay: 0.36s;
+}
+.voice-bubble.playing .voice-bubble__wave i:nth-child(5) {
+  animation-delay: 0.48s;
+}
+@keyframes voice-wave {
+  0%,
+  100% {
+    transform: scaleY(0.6);
+  }
+  50% {
+    transform: scaleY(1.25);
+  }
+}
+.voice-bubble__dur {
+  font-size: 11px;
+  opacity: 0.75;
+  flex: none;
+}
+.chat-video {
+  display: block;
+  width: 220px;
+  max-width: 64vw;
+  max-height: 300px;
+  border-radius: 8px;
+  background: #000;
 }
 .msg--card :deep(.mix-message__container) {
   padding: 6px !important;

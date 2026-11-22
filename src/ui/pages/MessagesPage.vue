@@ -123,11 +123,19 @@ async function removeConv() {
   showToast('聊天已删除')
 }
 
-const menuItems = [
+type MenuItem = {
+  label: string
+  icon: unknown
+  color: string
+  to?: string
+  action?: () => void
+}
+
+const menuItems: MenuItem[] = [
   { label: '加好友', icon: PersonAddOutline, color: '#3b82f6', to: '/add' },
   { label: '导入角色卡', icon: CloudUploadOutline, color: '#0ea5e9', to: '/add?action=import' },
   { label: '新建角色', icon: CreateOutline, color: '#f59e0b', to: '/add?action=create' },
-  { label: '发起群聊', icon: PeopleOutline, color: '#22c55e', action: () => showToast('群聊 · 下个版本见') },
+  { label: '发起群聊', icon: PeopleOutline, color: '#22c55e', to: '/group/new' },
   { label: '搜索', icon: SearchOutline, color: '#64748b', to: '/search' },
   { label: '酒馆', icon: BookOutline, color: '#f97316', to: '/tavern' },
   { label: 'AI 设置', icon: SparklesOutline, color: '#8b5cf6', to: '/settings/ai' },
