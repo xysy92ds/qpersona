@@ -13,6 +13,7 @@ import SearchPage from '@/ui/pages/SearchPage.vue'
 import ProfileEditPage from '@/ui/pages/ProfileEditPage.vue'
 import StickersPage from '@/ui/pages/StickersPage.vue'
 import GroupCreatePage from '@/ui/pages/GroupCreatePage.vue'
+import GroupInfoPage from '@/ui/pages/GroupInfoPage.vue'
 
 /**
  * 用 hash 路由：静态部署到任何地方（GitHub Pages / 本地文件）都不会 404，
@@ -30,6 +31,7 @@ export const router = createRouter({
     { path: '/profile', name: 'profile', component: ProfileEditPage },
     { path: '/stickers', name: 'stickers', component: StickersPage },
     { path: '/group/new', name: 'group-new', component: GroupCreatePage },
+    { path: '/group/:id/info', name: 'group-info', component: GroupInfoPage, props: true },
     { path: '/settings', name: 'settings', component: SettingsPage },
     { path: '/settings/ai', name: 'ai-settings', component: AiSettingsPage },
     { path: '/character/:id', name: 'character', component: CharacterPage, props: true },

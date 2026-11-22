@@ -186,7 +186,7 @@ export const useContactsStore = defineStore('contacts', {
         id: uid('m'),
         conversationId: conv.id,
         role: 'system',
-        text: '群聊已创建。试试 @ 某个成员，或者提到他们感兴趣的事——没人被叫到的时候，群里会保持安静。',
+        text: '群聊已创建。试试 @ 某个成员，或者提到他们感兴趣的事；被叫到的角色会保持 5 分钟活跃（可在群设置里改），之后自动静默省 token。',
         ts: now,
         status: 'ok',
         kind: 'tip',

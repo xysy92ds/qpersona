@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   AddCircleOutline,
@@ -57,6 +57,8 @@ const panel = ref<'emoji' | 'sticker' | null>(null)
 const moreOpen = ref(false)
 const cardOpen = ref(false)
 const mentionOpen = ref(false)
+const mentionQuery = ref<string | null>(null)
+const mentionStart = ref(0)
 const listening = ref(false)
 const recording = ref(false)
 const recordSeconds = ref(0)
@@ -104,6 +106,11 @@ function submit() {
 
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    if (mentionQuery.value !== null && mentionMatches.value.length) {
+      e.preventDefault()
+      chooseMention(mentionMatches.value[0]!)
+      return
+    }
     e.preventDefault()
     submit()
   }
@@ -128,6 +135,56 @@ function pickEmoji(e: string) {
 function pickMention(name: string) {
   insertText(`@${name} `)
   mentionOpen.value = false
+}
+
+const mentionMatches = computed(() => {
+  if (mentionQuery.value === null) return []
+  const q = mentionQuery.value.toLowerCase()
+  return (props.mentionNames ?? []).filter((n) => n.toLowerCase().includes(q)).slice(0, 6)
+})
+
+function updateMention() {
+  const el = area.value
+  if (!el || !props.mentionNames?.length) {
+    mentionQuery.value = null
+    return
+  }
+  const pos = el.selectionStart ?? text.value.length
+  const before = text.value.slice(0, pos)
+  const m = before.match(/@([^\s@]{0,16})$/)
+  if (!m) {
+    mentionQuery.value = null
+    return
+  }
+  mentionStart.value = pos - m[0].length
+  mentionQuery.value = m[1] ?? ''
+}
+
+function chooseMention(name: string) {
+  const el = area.value
+  const pos = el?.selectionStart ?? text.value.length
+  const before = text.value.slice(0, mentionStart.value)
+  const after = text.value.slice(pos)
+  const insert = `@${name} `
+  text.value = before + insert + after
+  mentionQuery.value = null
+  nextTick(() => {
+    el?.focus()
+    const p = before.length + insert.length
+    el?.setSelectionRange(p, p)
+    resize()
+  })
+}
+
+function onInput() {
+  resize()
+  updateMention()
+}
+
+function hideMentionSoon() {
+  window.setTimeout(() => {
+    mentionQuery.value = null
+  }, 180)
 }
 
 function openMention() {
@@ -402,6 +459,18 @@ watch(text, () => nextTick(resize))
       </div>
     </div>
 
+    <div v-if="mentionQuery !== null && mentionMatches.length" class="mention-pop">
+      <button
+        v-for="name in mentionMatches"
+        :key="name"
+        class="mention-item"
+        @mousedown.prevent="chooseMention(name)"
+      >
+        <AtOutline />
+        <span>{{ name }}</span>
+      </button>
+    </div>
+
     <div class="bar">
       <button
         class="cbtn"
@@ -420,8 +489,10 @@ watch(text, () => nextTick(resize))
           placeholder=""
           enterkeyhint="send"
           @keydown="onKey"
-          @input="resize"
+          @input="onInput"
+          @click="updateMention"
           @focus="panel = null"
+          @blur="hideMentionSoon"
         />
       </div>
       <button class="cbtn" :class="{ active: panel }" aria-label="表情" @click="panel = panel ? null : 'emoji'">
@@ -589,6 +660,34 @@ watch(text, () => nextTick(resize))
 .quote-bar__close svg {
   width: 14px;
   height: 14px;
+}
+.mention-pop {
+  display: flex;
+  flex-direction: column;
+  max-height: 170px;
+  overflow-y: auto;
+  padding: 4px 8px 6px;
+  border-bottom: 0.5px solid var(--line);
+  background: var(--bg-sheet);
+}
+.mention-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: var(--text);
+  text-align: left;
+}
+.mention-item:active {
+  background: var(--bg-hover);
+}
+.mention-item svg {
+  width: 16px;
+  height: 16px;
+  color: var(--brand);
+  flex: none;
 }
 .panel {
   border-bottom: 0.5px solid var(--line);

@@ -112,7 +112,7 @@ function onTouchEnd() {
           <button class="drawer-mode" @click="settings.toggleTheme()">
             <MoonOutline /> {{ settings.isDark ? '切到浅色' : '夜间模式' }}
           </button>
-          <span class="drawer-ver">Q伴 0.8.0</span>
+          <span class="drawer-ver">Q伴 0.9.0</span>
         </div>
         <div class="drawer-hint">向左滑动关闭</div>
       </aside>

@@ -290,7 +290,6 @@ export const useChatStore = defineStore('chat', {
         return
       }
       const contacts = useContactsStore()
-      const settings = useSettingsStore()
       const conv = contacts.conversationById(convId)
       if (!conv || conv.kind !== 'group') return
       await this.load(convId)
@@ -299,6 +298,15 @@ export const useChatStore = defineStore('chat', {
         .map((id) => contacts.characterById(id))
         .filter((c): c is Character => !!c && c.ext.toggles.chat)
       if (!members.length) return
+
+      const now = Date.now()
+      const ACTIVE_MS = (conv.groupActiveMinutes ?? 5) * 60 * 1000
+      const COOLDOWN_MS = 1500
+      const activeMap: Record<string, number> = { ...(conv.groupActive ?? {}) }
+      const spokeMap: Record<string, number> = { ...(conv.groupLastSpoke ?? {}) }
+      for (const [id, until] of Object.entries(activeMap)) {
+        if (until <= now) delete activeMap[id]
+      }
 
       const lastUser = [...list].reverse().find((m) => m.role === 'user')
       const text = lastUser ? messageText(lastUser) : ''
@@ -313,18 +321,52 @@ export const useChatStore = defineStore('chat', {
         }
       }
 
-      const picked = pickSpeakers(members, text, {
+      const triggered = pickSpeakers(members, text, {
         lastSpeakerId: speakerIds[speakerIds.length - 1],
         spokeCounts,
-        max: 2,
+        max: 4,
         threshold: 15,
       })
-      if (!picked.length) return
+
+      // 被叫到的人续命 5 分钟；即使这一轮没轮到发言
+      for (const s of triggered) activeMap[s.character.id] = now + ACTIVE_MS
+
+      const chosen: Character[] = []
+      const chosenIds = new Set<string>()
+
+      // 先处理被 @ / 叫名字 / 兴趣命中的人
+      for (const s of triggered) {
+        if (chosen.length >= 2) break
+        const at = s.reasons.includes('@')
+        const last = spokeMap[s.character.id] ?? 0
+        if (!at && now - last < COOLDOWN_MS) continue
+        chosen.push(s.character)
+        chosenIds.add(s.character.id)
+      }
+
+      // 还在 5 分钟活跃窗口里的成员，可以继续接话
+      const activeMembers = members
+        .filter((m) => !!activeMap[m.id] && !chosenIds.has(m.id))
+        .sort((a, b) => (spokeMap[a.id] ?? 0) - (spokeMap[b.id] ?? 0))
+      for (const m of activeMembers) {
+        if (chosen.length >= 2) break
+        if (now - (spokeMap[m.id] ?? 0) < COOLDOWN_MS) continue
+        chosen.push(m)
+        chosenIds.add(m.id)
+      }
+
+      if (!chosen.length) {
+        await contacts.touch(convId, { groupActive: activeMap })
+        return
+      }
 
       this.streaming[convId] = true
       try {
-        for (const item of picked) {
-          await this.groupStream(convId, item.character, members, conv)
+        for (const ch of chosen) {
+          await this.groupStream(convId, ch, members, conv)
+          activeMap[ch.id] = Date.now() + ACTIVE_MS
+          spokeMap[ch.id] = Date.now()
+          await contacts.touch(convId, { groupActive: activeMap, groupLastSpoke: spokeMap })
           await sleep(320)
         }
       } finally {
@@ -437,9 +479,46 @@ export const useChatStore = defineStore('chat', {
         reply.status = 'error'
         reply.text = '（这句没生成出来）'
       }
+
+      // 群聊也允许一次发两三条，别一句就没了
+      let preview = reply.text
+      if (reply.status === 'ok') {
+        const parts = splitBubbles(reply.text)
+        if (parts.length > 1) {
+          reply.text = parts[0]!
+          const extras: Message[] = []
+          for (let i = 1; i < parts.length; i++) {
+            await sleep(240)
+            const extra = reactive<Message>({
+              id: uid('m'),
+              conversationId: convId,
+              role: 'assistant',
+              characterId: ch.id,
+              text: parts[i]!,
+              ts: nextTs(list),
+              status: 'ok',
+              kind: 'text',
+            })
+            await this.pushLocal(convId, extra)
+            extras.push(extra)
+            preview = parts[i]!
+          }
+          const last = extras[extras.length - 1]
+          if (last) {
+            last.usage = reply.usage
+            last.cost = reply.cost
+            last.usageEstimated = reply.usageEstimated
+            reply.usage = undefined
+            reply.cost = undefined
+            reply.usageEstimated = undefined
+            await putMessage(last)
+          }
+        }
+      }
+
       await putMessage(reply)
       await contacts.touch(convId, {
-        lastText: `${displayName}：${reply.text.slice(0, 60)}`,
+        lastText: `${displayName}：${preview.slice(0, 60)}`,
         lastTs: Date.now(),
       })
     },

@@ -140,6 +140,12 @@ export interface Conversation {
   muted?: boolean
   /** 记忆总结游标：这个时间之前的消息已经总结过 */
   memoryLastTs?: number
+  /** 群聊激活状态：characterId -> 活跃截止时间戳 */
+  groupActive?: Record<string, number>
+  /** 群聊最近发言时间：characterId -> 时间戳 */
+  groupLastSpoke?: Record<string, number>
+  /** 被叫醒后保持活跃的分钟数，默认 5 */
+  groupActiveMinutes?: number
   createdAt: number
 }
 

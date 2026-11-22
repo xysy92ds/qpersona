@@ -410,6 +410,16 @@ async function pokeBy(name: string) {
           <span class="cell__desc">看看这个群里都有谁</span>
         </span>
       </button>
+      <button
+        v-if="conv.kind === 'group'"
+        class="cell"
+        @click="sheet = false; router.push(`/group/${conv.id}/info`)"
+      >
+        <span class="cell__body">
+          <span class="cell__title">群聊设置</span>
+          <span class="cell__desc">改群名、群头像、成员和唤醒时长</span>
+        </span>
+      </button>
       <button class="cell" @click="regenerate">
         <span class="cell__body">
           <span class="cell__title">重新生成</span>
