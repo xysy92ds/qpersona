@@ -40,6 +40,7 @@ pnpm install
 pnpm dev          # http://localhost:5173
 pnpm build        # 产物在 dist/，可静态部署
 pnpm typecheck
+pnpm test:smoke   # 三组冒烟测试：核心逻辑 / Dexie 存储 / 假模型 SSE 端到端
 ```
 
 手机和电脑在同一局域网时，可以 `pnpm dev` 后用手机访问电脑的 `http://<IP>:5173`。

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { db } from '@/core/db'
+import { db, putCharacter, putConversation, putMessage } from '@/core/db'
 import type { CardData, Character, ContextProfileId, Conversation, PersonaExt } from '@/core/types'
 import { greetingFor } from '@/core/prompt'
 import { uid } from '@/core/util'
@@ -44,7 +44,7 @@ export const useContactsStore = defineStore('contacts', {
 
     async seed() {
       const demo = makeDemoCharacter()
-      await db.characters.put(demo)
+      await putCharacter(demo)
       this.characters.push(demo)
       await this.ensureConversation(demo.id, 'qq')
     },
@@ -52,7 +52,7 @@ export const useContactsStore = defineStore('contacts', {
     async addCharacter(card: CardData, ext: PersonaExt): Promise<Character> {
       const now = Date.now()
       const ch: Character = { id: uid('c'), card, ext, createdAt: now, updatedAt: now }
-      await db.characters.put(ch)
+      await putCharacter(ch)
       this.characters.push(ch)
       await this.ensureConversation(ch.id, 'qq')
       return ch
@@ -63,7 +63,7 @@ export const useContactsStore = defineStore('contacts', {
       if (i < 0) return
       const next = { ...this.characters[i]!, ...patch, updatedAt: Date.now() }
       this.characters[i] = next
-      await db.characters.put(next)
+      await putCharacter(next)
     },
 
     async removeCharacter(id: string, alsoMessages = true) {
@@ -107,11 +107,11 @@ export const useContactsStore = defineStore('contacts', {
         pinned: false,
         createdAt: now,
       }
-      await db.conversations.put(conv)
+      await putConversation(conv)
       this.conversations.push(conv)
 
       if (greeting.trim()) {
-        await db.messages.put({
+        await putMessage({
           id: uid('m'),
           conversationId: conv.id,
           role: 'assistant',
@@ -130,7 +130,7 @@ export const useContactsStore = defineStore('contacts', {
       if (i < 0) return
       const next = { ...this.conversations[i]!, ...patch }
       this.conversations[i] = next
-      await db.conversations.put(next)
+      await putConversation(next)
     },
 
     async markRead(conversationId: string) {

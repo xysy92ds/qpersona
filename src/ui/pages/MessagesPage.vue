@@ -12,7 +12,8 @@ const router = useRouter()
 const contacts = useContactsStore()
 const chat = useChatStore()
 
-const convs = computed(() => contacts.sorted)
+// QQ 消息列表只显示 QQ 端会话；酒馆会话在 /tavern 里进入，两边共享角色卡
+const convs = computed(() => contacts.sorted.filter((c) => c.profile === 'qq'))
 
 function titleOf(c: Conversation): string {
   if (c.kind === 'group') return c.title
@@ -64,10 +65,7 @@ function open(c: Conversation) {
           </div>
           <div class="conv__body">
             <div class="conv__row">
-              <span class="conv__name">
-                {{ titleOf(c) }}
-                <em v-if="c.profile === 'tavern'" class="tag">酒馆</em>
-              </span>
+              <span class="conv__name">{{ titleOf(c) }}</span>
               <span class="conv__time">{{ listTime(c.lastTs) }}</span>
             </div>
             <div class="conv__row">
@@ -189,15 +187,6 @@ function open(c: Conversation) {
   display: flex;
   align-items: center;
   gap: 5px;
-}
-.tag {
-  font-style: normal;
-  font-size: 9.5px;
-  font-weight: 500;
-  padding: 1px 4px;
-  border-radius: 4px;
-  background: rgba(255, 159, 10, 0.14);
-  color: #d97706;
 }
 .conv__time {
   font-size: 11px;

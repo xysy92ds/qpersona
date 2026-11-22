@@ -31,11 +31,24 @@ class QPersonaDB extends Dexie {
 
 export const db = new QPersonaDB()
 
+/**
+ * IndexedDB 用 structured clone 写数据，而 Pinia 里的对象是 Proxy，直接 put 会抛
+ * DataCloneError（浏览器里同样会炸）。所有写库都先转成纯 JSON 对象。
+ */
+export function toPlain<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
+export const putCharacter = (c: Character) => db.characters.put(toPlain(c))
+export const putConversation = (c: Conversation) => db.conversations.put(toPlain(c))
+export const putMessage = (m: Message) => db.messages.put(toPlain(m))
+export const putProfile = (p: ApiProfile) => db.profiles.put(toPlain(p))
+
 export async function kvGet<T>(key: string, fallback: T): Promise<T> {
   const row = await db.kv.get(key)
   return row ? (row.value as T) : fallback
 }
 
 export async function kvSet(key: string, value: unknown): Promise<void> {
-  await db.kv.put({ key, value })
+  await db.kv.put({ key, value: toPlain(value) })
 }

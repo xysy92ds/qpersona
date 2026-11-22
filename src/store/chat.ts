@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { reactive } from 'vue'
-import { db } from '@/core/db'
+import { db, putMessage } from '@/core/db'
 import type { Message } from '@/core/types'
 import type { ChatMsg } from '@/core/llm'
 import { buildChatMessages } from '@/core/prompt'
@@ -61,7 +61,7 @@ export const useChatStore = defineStore('chat', {
 
     async pushLocal(convId: string, msg: Message) {
       ;(this.byConv[convId] ??= []).push(msg)
-      await db.messages.put({ ...msg })
+      await putMessage(msg)
     },
 
     stop(convId: string) {
@@ -125,7 +125,7 @@ export const useChatStore = defineStore('chat', {
         reply.status = 'error'
         reply.text =
           '还没有可用的文本模型。\n去「设置 → AI 设置」添加一个 OpenAI 兼容接口（Base URL / API Key / 模型名），就能开始聊了。'
-        await db.messages.put({ ...reply })
+        await putMessage(reply)
         return
       }
 
@@ -141,7 +141,7 @@ export const useChatStore = defineStore('chat', {
       } catch (e) {
         reply.status = 'error'
         reply.text = `组装请求失败：${String(e)}`
-        await db.messages.put({ ...reply })
+        await putMessage(reply)
         return
       }
 
@@ -197,7 +197,7 @@ export const useChatStore = defineStore('chat', {
         reply.text = '（模型返回了空内容，检查一下模型名或参数）'
         preview = reply.text
       }
-      await db.messages.put({ ...reply })
+      await putMessage(reply)
       await contacts.touch(convId, { lastText: preview.slice(0, 80), lastTs: Date.now() })
     },
 
