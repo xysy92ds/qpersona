@@ -115,3 +115,5 @@ UI 只有一个 `CallOverlay.vue`：通话计时、麦克风/摄像头/屏幕共
 - 不落盘原始视频/屏幕帧；只保留文字描述；
 - WebRTC 需要 HTTPS 或 localhost，部署时注意；
 - 公共 PeerServer 不适合长期使用，生产要自建或换 LiveKit。
+
+> 一起看视频不属于通话：用字幕时间轴比连续视觉便宜得多，见 [watch-together.md](watch-together.md)。

@@ -235,6 +235,10 @@ ext: {
   - AI 侧：本地采集 + 截帧 + vision，不需要 WebRTC
   - 真人侧：1:1 用 PeerJS，多人用 LiveKit（含屏幕共享）
   - 选型与来源见 [docs/rtc-research.md](docs/rtc-research.md)，分阶段见 [docs/voice-and-screen.md](docs/voice-and-screen.md)
+- **下一步 · 一起看视频**
+  - 播放器 + 字幕时间轴 + 角色陪看，成本比连续视觉低一个数量级
+  - 真人同步用 OpenTogetherTube / Syncplay，不自己写
+  - 方案与成本对比见 [docs/watch-together.md](docs/watch-together.md)
 - **之后 · 蒸馏与双端打磨**
   - `.txt` 聊天记录解析（`---- 2023-11-18 ----` / `[17:03:21] 昵称：内容`），部分匹配时提示「已识别 X 条，Y 行未识别」
   - 统计语感：句长、标点、口头禅、活跃时段、高频原话
