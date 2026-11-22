@@ -146,6 +146,10 @@ export interface Conversation {
   groupLastSpoke?: Record<string, number>
   /** 被叫醒后保持活跃的分钟数，默认 5 */
   groupActiveMinutes?: number
+  /** 每个成员各自的群记忆游标 */
+  groupMemoryTs?: Record<string, number>
+  /** 群聊里能不能提起私聊记得的事，默认可以 */
+  groupMemoryShare?: boolean
   createdAt: number
 }
 
@@ -256,6 +260,8 @@ export interface Memory {
   content: string
   /** 1~10，越高越容易被召回 */
   importance: number
+  /** 这条记忆是在哪种会话里得来的 */
+  source?: 'group' | 'private'
   tags: string[]
   createdAt: number
   lastAccessed: number

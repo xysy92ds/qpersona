@@ -372,6 +372,15 @@ export const useChatStore = defineStore('chat', {
       } finally {
         this.streaming[convId] = false
       }
+      try {
+        useMemoryStore().maybeSummarizeGroup(
+          convId,
+          chosen.map((c) => c.id),
+        )
+      } catch {
+        /* 记忆失败不影响群聊 */
+      }
+
       if (this.pendingReply[convId]) {
         this.pendingReply[convId] = false
         void this.dispatchReply(convId)
@@ -401,7 +410,9 @@ export const useChatStore = defineStore('chat', {
         .join(' ')
       let memoryText = ''
       try {
-        memoryText = await memory.recall(ch.id, query)
+        memoryText = await memory.recall(ch.id, query, {
+          includePrivate: conv.groupMemoryShare !== false,
+        })
       } catch {
         memoryText = ''
       }

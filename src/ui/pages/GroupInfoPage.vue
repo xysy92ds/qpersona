@@ -23,6 +23,7 @@ const title = ref(conv.value?.title ?? '')
 const avatar = ref(conv.value?.avatar ?? '')
 const activeMinutes = ref(conv.value?.groupActiveMinutes ?? 5)
 const memberIds = ref<string[]>([...(conv.value?.memberIds ?? [])])
+const memoryShare = ref(conv.value?.groupMemoryShare !== false)
 const avatarInput = ref<HTMLInputElement>()
 const addOpen = ref(false)
 
@@ -75,6 +76,7 @@ async function save() {
     title: name,
     avatar: avatar.value,
     groupActiveMinutes: activeMinutes.value,
+    groupMemoryShare: memoryShare.value,
     memberIds: memberIds.value,
   })
   showToast('群资料已更新')
@@ -129,6 +131,19 @@ function goBack() {
         <div class="hint" style="padding: 8px 2px 4px">
           这段时间内，被 @ 或聊到兴趣的角色会继续接话；超过时间没有新消息就静默，不再调用模型。
         </div>
+      </div>
+
+      <div class="group-title">记忆</div>
+      <div class="sheet-block">
+        <button class="cell" @click="memoryShare = !memoryShare">
+          <div class="cell__body">
+            <div class="cell__title">群聊里可以提起私聊的事</div>
+            <div class="cell__desc">
+              打开后，私聊总结的记忆也会注入群聊；群聊里记下的事，私聊里也能想起来。
+            </div>
+          </div>
+          <span class="switch" :class="{ on: memoryShare }" />
+        </button>
       </div>
 
       <div class="group-title">群成员 · {{ memberIds.length }}</div>

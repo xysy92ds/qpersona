@@ -25,7 +25,11 @@ const avatarInput = ref<HTMLInputElement>()
 const memoryBusy = ref(false)
 
 const memoryList = computed(() => memory.memoriesOf(ch.value?.id))
-const memoryConv = computed(() => contacts.conversations.find((c) => c.characterId === ch.value?.id))
+const memoryConv = computed(
+  () =>
+    contacts.conversations.find((c) => c.characterId === ch.value?.id && c.kind === 'single') ??
+    contacts.conversations.find((c) => c.characterId === ch.value?.id),
+)
 
 onMounted(() => {
   if (ch.value) void memory.load(ch.value.id)
@@ -47,7 +51,10 @@ async function summarizeMemory() {
   }
   memoryBusy.value = true
   try {
-    const n = await memory.summarize(memoryConv.value.id)
+    const n = await memory.summarize(memoryConv.value.id, {
+      characterId: ch.value.id,
+      source: memoryConv.value.kind === 'group' ? 'group' : 'private',
+    })
     showToast(n ? `记下了 ${n} 条` : '这次没有新的可记内容')
   } finally {
     memoryBusy.value = false
@@ -220,6 +227,7 @@ function goBack() {
           聊满 10 轮会在后台自动整理；也可以点「立即整理」。整理结果会按相关度注入到提示词里。
         </div>
         <div v-for="m in memoryList" :key="m.id" class="mem-item">
+          <span v-if="m.source === 'group'" class="mem-source">群聊</span>
           <span
             class="mem-type"
             :style="{ color: typeMeta(m.type).color, background: typeMeta(m.type).color + '1a' }"
@@ -447,6 +455,15 @@ function goBack() {
 }
 .mem-item:last-child {
   border-bottom: none;
+}
+.mem-source {
+  font-size: 9px;
+  color: #7c3aed;
+  background: rgba(124, 58, 237, 0.1);
+  border-radius: 4px;
+  padding: 1px 4px;
+  flex: none;
+  margin-top: 2px;
 }
 .mem-type {
   font-size: 9.5px;

@@ -11,24 +11,23 @@ import { createPinia, setActivePinia } from 'pinia'
 }
 
 const server = http.createServer((req, res) => {
-  req.resume()
+  let body = ''
+  req.on('data', (c) => (body += c))
   req.on('end', () => {
+    const isGroup = body.includes('最近群聊')
+    const memories = isGroup
+      ? [
+          { type: 'event', content: '你们在群里约好周末一起去看展', importance: 8, tags: ['展', '群'] },
+        ]
+      : [
+          { type: 'preference', content: '对方喜欢雨天，觉得适合待在书店', importance: 8, tags: ['雨', '书店'] },
+          { type: 'event', content: '对方今晚加班到很晚，还没吃饭', importance: 6, tags: ['加班'] },
+          { type: 'preference', content: '对方喜欢雨天，觉得适合待在书店', importance: 5, tags: [] },
+        ]
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(
       JSON.stringify({
-        choices: [
-          {
-            message: {
-              content: JSON.stringify({
-                memories: [
-                  { type: 'preference', content: '对方喜欢雨天，觉得适合待在书店', importance: 8, tags: ['雨', '书店'] },
-                  { type: 'event', content: '对方今晚加班到很晚，还没吃饭', importance: 6, tags: ['加班'] },
-                  { type: 'preference', content: '对方喜欢雨天，觉得适合待在书店', importance: 5, tags: [] },
-                ],
-              }),
-            },
-          },
-        ],
+        choices: [{ message: { content: JSON.stringify({ memories }) } }],
       }),
     )
   })
@@ -118,5 +117,28 @@ console.log('7) quote->prompt:', JSON.stringify(contents[2]))
 console.log('8) memory injected:', built[0]!.content.includes('对方喜欢雨天'))
 console.log('9) card->prompt:', JSON.stringify(contents[3]))
 console.log('10) media->prompt:', JSON.stringify(contents.slice(4)))
+
+// —— 群聊记忆 → 私聊：用同一份 characterId，source=group ——
+const group = await contacts.createGroup([ch.id], '测试群')
+const base = Date.now()
+for (let i = 0; i < 8; i++) {
+  await db.messages.put({
+    id: `gm${i}`,
+    conversationId: group.id,
+    role: i % 2 ? 'assistant' : 'user',
+    characterId: i % 2 ? ch.id : undefined,
+    text: i % 2 ? '那周末三点在门口见' : '周六一起去看展吗',
+    ts: base + i * 1000,
+    status: 'ok',
+    kind: 'text',
+  } as any)
+}
+const groupCreated = await memory.summarize(group.id, { characterId: ch.id, source: 'group' })
+const allMem = await db.memories.where('characterId').equals(ch.id).toArray()
+console.log('9) group summary:', groupCreated, '| tagged source=group:', allMem.some((m) => m.source === 'group'))
+const privateRecall = await memory.recall(ch.id, '周末去看展')
+console.log('10) private chat recalls group memory:', privateRecall.includes('看展') && privateRecall.includes('[群聊]'))
+const groupOnly = await memory.recall(ch.id, '雨天看展', { includePrivate: false })
+console.log('11) group-only recall drops private:', !groupOnly.includes('雨天') && groupOnly.includes('看展'))
 
 server.close()

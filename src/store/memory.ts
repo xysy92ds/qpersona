@@ -65,9 +65,16 @@ export const useMemoryStore = defineStore('memory', {
 
     /**
      * 关键词 + importance 的轻量召回。中文按二元组命中，够用且零模型调用。
+     * includePrivate=false 时只返回群聊里得来的记忆（群聊设置里可以关掉私聊记忆）。
      */
-    async recall(characterId: string, query: string): Promise<string> {
-      const all = await db.memories.where('characterId').equals(characterId).toArray()
+    async recall(
+      characterId: string,
+      query: string,
+      opts: { includePrivate?: boolean } = {},
+    ): Promise<string> {
+      const all = (await db.memories.where('characterId').equals(characterId).toArray()).filter(
+        (m) => (opts.includePrivate === false ? m.source === 'group' : true),
+      )
       if (!all.length) return ''
 
       const q = query.slice(-240)
@@ -91,15 +98,20 @@ export const useMemoryStore = defineStore('memory', {
       const top = scored.filter((s) => s.score >= 1.1).slice(0, 7)
       if (!top.length) return ''
 
-      return top.map(({ m }) => `- [${TYPE_LABEL[m.type] ?? '记忆'}] ${m.content}`).join('\n')
+      return top
+        .map(({ m }) => {
+          const where = m.source === 'group' ? '[群聊]' : ''
+          return `- ${where}[${TYPE_LABEL[m.type] ?? '记忆'}] ${m.content}`
+        })
+        .join('\n')
     },
 
-    /** 每轮回复后调用；不阻塞聊天，后台串行跑总结 */
+    /** 单聊每轮回复后调用；不阻塞聊天，后台串行跑总结 */
     maybeSummarize(conversationId: string) {
       const contacts = useContactsStore()
       const settings = useSettingsStore()
       const conv = contacts.conversationById(conversationId)
-      if (!conv) return
+      if (!conv || conv.kind === 'group') return
       if (!settings.flags.memory) return
       const ch = contacts.characterById(conv.characterId)
       if (!ch || !ch.ext.toggles.memory) return
@@ -117,29 +129,68 @@ export const useMemoryStore = defineStore('memory', {
         .catch((e) => console.warn('[memory] summarize failed', e))
     },
 
+    /**
+     * 群聊总结：每个发言角色只整理自己视角的群消息，最多两个角色，避免一次群聊烧 N 份钱。
+     * 产物会带 source='group'，私聊召回时也能看到。
+     */
+    maybeSummarizeGroup(conversationId: string, characterIds: string[]) {
+      const contacts = useContactsStore()
+      const settings = useSettingsStore()
+      if (!settings.flags.memory) return
+      const conv = contacts.conversationById(conversationId)
+      if (!conv || conv.kind !== 'group') return
+      const ids = [...new Set(characterIds)].slice(0, 2)
+      for (const id of ids) {
+        const ch = contacts.characterById(id)
+        if (!ch || !ch.ext.toggles.memory) continue
+        queue = queue
+          .then(async () => {
+            const current = contacts.conversationById(conversationId)
+            if (!current) return
+            const after = current.groupMemoryTs?.[ch.id] ?? 0
+            const rows = await db.messages.where('conversationId').equals(conversationId).toArray()
+            const fresh = rows.filter(
+              (m) => m.ts > after && (m.role === 'user' || m.role === 'assistant') && m.kind !== 'tip',
+            )
+            if (fresh.length < 8) return
+            await this.summarize(conversationId, { characterId: ch.id, source: 'group' })
+          })
+          .catch((e) => console.warn('[memory] group summarize failed', e))
+      }
+    },
+
     /** 手动「立即整理」也走这里；返回新增条数 */
-    async summarize(conversationId: string): Promise<number> {
+    async summarize(
+      conversationId: string,
+      options: { characterId?: string; source?: 'group' | 'private' } = {},
+    ): Promise<number> {
       const contacts = useContactsStore()
       const settings = useSettingsStore()
       const conv = contacts.conversationById(conversationId)
       if (!conv) return 0
-      const ch = contacts.characterById(conv.characterId)
+      const ch = options.characterId
+        ? contacts.characterById(options.characterId)
+        : contacts.characterById(conv.characterId)
       if (!ch) return 0
+      const source: 'group' | 'private' =
+        options.source ?? (conv.kind === 'group' ? 'group' : 'private')
       const profile = settings.profileFor('memory_summary', ch.ext.routing.memory_summary)
       if (!profile) {
         return 0
       }
-      if (this.summarizing[conversationId]) return 0
+      const key = `${conversationId}:${ch.id}`
+      if (this.summarizing[key]) return 0
 
       const rows = await db.messages.where('conversationId').equals(conversationId).toArray()
       rows.sort((a, b) => a.ts - b.ts)
-      const after = conv.memoryLastTs ?? 0
+      const after =
+        source === 'group' ? conv.groupMemoryTs?.[ch.id] ?? 0 : conv.memoryLastTs ?? 0
       const fresh = rows.filter(
         (m) => m.ts > after && (m.role === 'user' || m.role === 'assistant') && m.kind !== 'tip' && textOf(m).trim(),
       )
       if (!fresh.length) return 0
 
-      this.summarizing[conversationId] = true
+      this.summarizing[key] = true
       try {
         const existing = await db.memories.where('characterId').equals(ch.id).toArray()
         const existingText = existing
@@ -147,10 +198,26 @@ export const useMemoryStore = defineStore('memory', {
           .map((m) => `- ${m.content}`)
           .join('\n')
 
-        const transcript = fresh
-          .slice(-40)
-          .map((m) => `${m.role === 'user' ? settings.user.nickname : ch.card.name}：${textOf(m)}`)
-          .join('\n')
+        let transcript: string
+        if (source === 'group') {
+          const names: Record<string, string> = {}
+          for (const id of conv.memberIds ?? []) {
+            const m = contacts.characterById(id)
+            if (m) names[id] = m.ext.qq.nickname || m.card.name
+          }
+          transcript = fresh
+            .slice(-40)
+            .map((m) => {
+              const who = m.role === 'user' ? settings.user.nickname : names[m.characterId ?? ''] || '群友'
+              return `${who}：${textOf(m)}`
+            })
+            .join('\n')
+        } else {
+          transcript = fresh
+            .slice(-40)
+            .map((m) => `${m.role === 'user' ? settings.user.nickname : ch.card.name}：${textOf(m)}`)
+            .join('\n')
+        }
 
         const prompt = `角色：${ch.card.name}
 对方：${settings.user.nickname}
@@ -158,7 +225,7 @@ export const useMemoryStore = defineStore('memory', {
 已有的记忆（不要重复）：
 ${existingText || '（暂无）'}
 
-最近聊天：
+${source === 'group' ? '最近群聊：' : '最近聊天：'}
 ${transcript}
 
 请提取值得长期记住的信息，输出 JSON：
@@ -168,7 +235,7 @@ ${transcript}
 - 只记以后聊天用得上的：对方的稳定信息、偏好、约定、发生过的事件、关系变化、你对 TA 的印象。
 - 不记一次性的寒暄、天气、临时的情绪。
 - 用第三人称陈述，例如「对方怕黑」「你们约好周末去看展」。
-- 最多 6 条；没有新内容就返回 {"memories":[]}。`
+${source === 'group' ? '- 这是群聊记录：只记与你（角色）和对方有关的事，不要记录其他群成员的隐私。\n' : ''}- 最多 6 条；没有新内容就返回 {"memories":[]}。`
 
         const raw = await completeChat({
           profile,
@@ -199,6 +266,7 @@ ${transcript}
             type,
             content: content.slice(0, 120),
             importance,
+            source,
             tags,
             createdAt: Date.now(),
             lastAccessed: 0,
@@ -209,15 +277,21 @@ ${transcript}
         }
 
         const lastTs = fresh[fresh.length - 1]!.ts
-        await contacts.touch(conversationId, { memoryLastTs: lastTs })
+        if (source === 'group') {
+          await contacts.touch(conversationId, {
+            groupMemoryTs: { ...(conv.groupMemoryTs ?? {}), [ch.id]: lastTs },
+          })
+        } else {
+          await contacts.touch(conversationId, { memoryLastTs: lastTs })
+        }
         await this.load(ch.id, true)
-        this.lastRun[conversationId] = Date.now()
+        this.lastRun[key] = Date.now()
         return created
       } catch (e) {
         console.warn('[memory] summarize error', e)
         return 0
       } finally {
-        this.summarizing[conversationId] = false
+        this.summarizing[key] = false
       }
     },
   },
