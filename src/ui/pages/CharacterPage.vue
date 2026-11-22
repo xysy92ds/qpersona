@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChatbubblesOutline, ChevronBack, SparklesOutline, TrashOutline } from '@vicons/ionicons5'
+import { CameraOutline, ChatbubblesOutline, ChevronBack, SparklesOutline, TrashOutline } from '@vicons/ionicons5'
 import Avatar from '@/ui/common/Avatar.vue'
 import BottomSheet from '@/ui/common/BottomSheet.vue'
 import { useContactsStore } from '@/store/contacts'
 import { useSettingsStore } from '@/store/settings'
 import { buildSystemPrompt } from '@/core/prompt'
+import { imageToDataUrl } from '@/core/util'
 import { showToast } from '@/ui/common/toast'
 
 const props = defineProps<{ id: string }>()
@@ -17,6 +18,7 @@ const settings = useSettingsStore()
 const ch = computed(() => contacts.characterById(props.id))
 const tab = ref<'qq' | 'tavern'>('qq')
 const confirmDelete = ref(false)
+const avatarInput = ref<HTMLInputElement>()
 
 const promptText = computed(() =>
   ch.value ? buildSystemPrompt(ch.value, tab.value, settings.user.nickname) : '',
@@ -26,6 +28,32 @@ async function openChat(profile: 'qq' | 'tavern') {
   if (!ch.value) return
   const conv = await contacts.ensureConversation(ch.value.id, profile)
   router.push(`/chat/${conv.id}`)
+}
+
+async function pickAvatar(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || !ch.value) return
+  if (!file.type.startsWith('image/')) {
+    showToast('选一张图片')
+    return
+  }
+  try {
+    const data = await imageToDataUrl(file, 360)
+    const ext = { ...ch.value.ext, qq: { ...ch.value.ext.qq, avatar: data } }
+    await contacts.updateCharacter(ch.value.id, { ext })
+    showToast('头像已更新')
+  } catch {
+    showToast('这张图读不出来，换一张试试')
+  }
+}
+
+async function resetAvatar() {
+  if (!ch.value) return
+  const ext = { ...ch.value.ext, qq: { ...ch.value.ext.qq, avatar: '' } }
+  await contacts.updateCharacter(ch.value.id, { ext })
+  showToast('已恢复默认头像')
 }
 
 async function toggle(key: 'chat' | 'memory') {
@@ -68,7 +96,10 @@ function goBack() {
 
     <div class="scroll">
       <div class="hero">
-        <Avatar :name="ch.card.name" :src="ch.ext.qq.avatar" :size="72" />
+        <button class="hero__avatar" aria-label="更换头像" @click="avatarInput?.click()">
+          <Avatar :name="ch.card.name" :src="ch.ext.qq.avatar" :size="72" />
+          <span class="hero__cam"><CameraOutline /></span>
+        </button>
         <div class="hero__body">
           <div class="hero__name">{{ ch.card.name }}</div>
           <div class="hero__meta">QQ {{ ch.ext.qq.qqNumber }} · {{ ch.ext.qq.nickname }}</div>
@@ -120,6 +151,12 @@ function goBack() {
           </div>
           <span class="switch" :class="{ on: ch.ext.toggles.memory }" />
         </button>
+        <button v-if="ch.ext.qq.avatar" class="cell" @click="resetAvatar">
+          <div class="cell__body">
+            <div class="cell__title">恢复默认头像</div>
+            <div class="cell__desc">换回按名字生成的头像</div>
+          </div>
+        </button>
         <div class="cell" style="cursor: default">
           <div class="cell__body">
             <div class="cell__title">这个角色用的模型</div>
@@ -158,6 +195,8 @@ function goBack() {
       </div>
     </div>
 
+    <input ref="avatarInput" type="file" accept="image/*" hidden @change="pickAvatar" />
+
     <BottomSheet v-model="confirmDelete" title="删除这个角色？">
       <div class="hint">「{{ ch.card.name }}」的角色卡和全部聊天记录都会从本地删除，无法撤销。</div>
       <template #footer>
@@ -190,6 +229,29 @@ function goBack() {
   align-items: center;
   padding: 18px 16px 16px;
   background: linear-gradient(180deg, rgba(0, 153, 255, 0.1), transparent);
+}
+.hero__avatar {
+  position: relative;
+  flex: none;
+  width: 72px;
+  height: 72px;
+}
+.hero__cam {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.62);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--bg-sheet);
+}
+.hero__cam svg {
+  width: 12px;
+  height: 12px;
 }
 .hero__name {
   font-size: 20px;

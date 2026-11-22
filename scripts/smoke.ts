@@ -21,7 +21,7 @@ console.log('1) card:', ch.card.name, '| ext origin:', ch.ext.origin, '| qq:', c
 
 const qq = buildSystemPrompt(ch, 'qq', '我')
 const tavern = buildSystemPrompt(ch, 'tavern', '我')
-console.log('2) qq prompt:', qq.length, 'chars, 短消息规则:', qq.includes('QQ 短消息'), '| tavern:', tavern.length, 'chars, 叙事:', tavern.includes('沉浸式'))
+console.log('2) qq prompt:', qq.length, 'chars, 短消息规则:', qq.includes('怎么发消息'), '| tavern:', tavern.length, 'chars, 叙事:', tavern.includes('沉浸式'))
 
 const v2 = CharacterCard.fromJSON({
   spec: 'chara_card_v2',

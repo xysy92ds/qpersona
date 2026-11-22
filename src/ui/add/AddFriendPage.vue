@@ -13,6 +13,7 @@ import {
 import BottomSheet from '@/ui/common/BottomSheet.vue'
 import Avatar from '@/ui/common/Avatar.vue'
 import { parseCardFile, buildCustomCard, type ParsedCard } from '@/core/card'
+import { imageToDataUrl } from '@/core/util'
 import { useContactsStore } from '@/store/contacts'
 import { showToast } from '@/ui/common/toast'
 
@@ -21,6 +22,8 @@ const router = useRouter()
 const contacts = useContactsStore()
 
 const fileInput = ref<HTMLInputElement>()
+const avatarInput = ref<HTMLInputElement>()
+const avatarPreview = ref('')
 const parsing = ref(false)
 const parsed = ref<ParsedCard | null>(null)
 const preview = ref(false)
@@ -37,6 +40,18 @@ const form = reactive({
 
 function pickFile() {
   fileInput.value?.click()
+}
+
+async function pickCreateAvatar(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  try {
+    avatarPreview.value = await imageToDataUrl(file, 360)
+  } catch {
+    showToast('这张图读不出来，换一张试试')
+  }
 }
 
 async function onFile(e: Event) {
@@ -83,6 +98,7 @@ async function createCharacter() {
       .filter(Boolean),
   })
   if (form.nickname.trim()) ext.qq.nickname = form.nickname.trim()
+  if (avatarPreview.value) ext.qq.avatar = avatarPreview.value
   const ch = await contacts.addCharacter(card, ext)
   createOpen.value = false
   const conv = contacts.conversations.find((c) => c.characterId === ch.id && c.profile === 'qq')
@@ -161,6 +177,7 @@ function goBack() {
     </div>
 
     <input ref="fileInput" type="file" accept=".json,.png,application/json,image/png" hidden @change="onFile" />
+    <input ref="avatarInput" type="file" accept="image/*" hidden @change="pickCreateAvatar" />
 
     <!-- 导入预览 -->
     <BottomSheet v-model="preview" title="确认角色">
@@ -196,6 +213,17 @@ function goBack() {
 
     <!-- 新建角色 -->
     <BottomSheet v-model="createOpen" title="新建角色">
+      <div class="create-avatar">
+        <button class="create-avatar__btn" @click="avatarInput?.click()">
+          <Avatar :name="form.name || '新朋友'" :src="avatarPreview" :size="64" />
+          <span class="create-avatar__hint">换头像</span>
+        </button>
+        <div class="create-avatar__desc">
+          <div class="create-avatar__title">头像</div>
+          <div>不上传就按名字生成一个渐变色头像</div>
+          <button v-if="avatarPreview" class="mini" @click="avatarPreview = ''">恢复默认</button>
+        </div>
+      </div>
       <label class="field">
         <span class="field__label">名字 <i>*</i></span>
         <input v-model="form.name" class="input" maxlength="24" placeholder="例如：林知夏" />
@@ -324,6 +352,46 @@ function goBack() {
   border-radius: 4px;
   background: rgba(124, 58, 237, 0.12);
   color: #7c3aed;
+}
+.create-avatar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 16px 6px;
+}
+.create-avatar__btn {
+  position: relative;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+}
+.create-avatar__hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 9.5px;
+  line-height: 20px;
+  text-align: center;
+}
+.create-avatar__desc {
+  font-size: 11.5px;
+  color: var(--text-3);
+  line-height: 1.6;
+}
+.create-avatar__title {
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+.mini {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--brand);
 }
 .preview {
   display: flex;

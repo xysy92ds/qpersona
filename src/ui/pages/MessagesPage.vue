@@ -22,8 +22,10 @@ import { useSettingsStore } from '@/store/settings'
 import type { Conversation } from '@/core/types'
 import { listTime } from '@/core/util'
 import { showToast } from '@/ui/common/toast'
+import { useUiStore } from '@/store/ui'
 
 const router = useRouter()
+const ui = useUiStore()
 const contacts = useContactsStore()
 const chat = useChatStore()
 const settings = useSettingsStore()
@@ -142,7 +144,7 @@ function runMenu(item: (typeof menuItems)[number]) {
 <template>
   <div class="page">
     <div class="hero">
-      <button class="me" @click="router.push('/me')">
+      <button class="me" @click="ui.openDrawer()">
         <Avatar :name="settings.user.nickname" :src="settings.user.avatar" :size="46" />
         <span class="me__body">
           <span class="me__name">{{ settings.user.nickname }}</span>
@@ -232,6 +234,7 @@ function runMenu(item: (typeof menuItems)[number]) {
         </span>
       </button>
     </BottomSheet>
+
   </div>
 </template>
 
@@ -457,4 +460,5 @@ function runMenu(item: (typeof menuItems)[number]) {
   width: 25px;
   height: 25px;
 }
+
 </style>
