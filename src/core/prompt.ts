@@ -110,6 +110,18 @@ export function buildSystemPrompt(
 
 const HISTORY_LIMIT: Record<ContextProfileId, number> = { qq: 40, tavern: 60 }
 
+/** 把非纯文本消息翻译成模型能读懂的一行，避免表情包/文件在历史里变成空白 */
+export function historyText(m: Message): string {
+  if (m.kind === 'sticker') {
+    const name = m.sticker?.name ?? '表情包'
+    const note = m.sticker?.annotation ? `，${m.sticker.annotation}` : ''
+    return `[表情包：${name}${note}]`
+  }
+  if (m.kind === 'file') return `[文件：${m.file?.name ?? '未命名文件'}]`
+  if (m.quote) return `[引用 ${m.quote.name}：「${m.quote.text}」]\n${m.text}`
+  return m.text
+}
+
 export interface BuildArgs {
   character: Character
   profile: ContextProfileId
@@ -126,11 +138,16 @@ export function buildChatMessages(args: BuildArgs): ChatMsg[] {
   const { character, profile, history, userName, memoryText } = args
   const system = buildSystemPrompt(character, profile, userName, memoryText)
   const turns = history
-    .filter((m) => m.kind !== 'tip' && m.role !== 'system' && m.text.trim())
+    .filter(
+      (m) =>
+        m.kind !== 'tip' &&
+        m.role !== 'system' &&
+        (m.text.trim() || m.kind === 'sticker' || m.kind === 'file'),
+    )
     .slice(-HISTORY_LIMIT[profile])
     .map<ChatMsg>((m) => ({
       role: m.role === 'assistant' ? 'assistant' : 'user',
-      content: m.text,
+      content: historyText(m),
     }))
 
   const messages: ChatMsg[] = [{ role: 'system', content: system }, ...turns]

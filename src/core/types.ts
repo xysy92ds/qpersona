@@ -136,11 +136,36 @@ export interface Conversation {
   pinned: boolean
   /** 消息免打扰：列表里不显示红点，只留一个小图标 */
   muted?: boolean
+  /** 记忆总结游标：这个时间之前的消息已经总结过 */
+  memoryLastTs?: number
   createdAt: number
 }
 
 export type MsgRole = 'user' | 'assistant' | 'system'
 export type MsgStatus = 'ok' | 'streaming' | 'error'
+export type MsgKind = 'text' | 'tip' | 'sticker' | 'file'
+
+export interface StickerPayload {
+  id: string
+  name: string
+  /** 给 AI 看的一句注解，例如「猫猫无语 / 表示懒得接话」 */
+  annotation: string
+  url: string
+}
+
+export interface FilePayload {
+  name: string
+  size: number
+  mime: string
+  url: string
+}
+
+export interface QuotePayload {
+  id: string
+  role: 'user' | 'assistant'
+  name: string
+  text: string
+}
 
 export interface Message {
   id: string
@@ -152,7 +177,13 @@ export interface Message {
   ts: number
   status: MsgStatus
   /** tip = 系统灰条 / 时间提示 */
-  kind?: 'text' | 'tip'
+  kind?: MsgKind
+  /** 表情包消息 */
+  sticker?: StickerPayload
+  /** 文件消息 */
+  file?: FilePayload
+  /** 引用某条消息 */
+  quote?: QuotePayload
   error?: string
   /** 这一次回复的 token 用量（assistant 消息才有） */
   usage?: { prompt: number; completion: number; total: number }
@@ -167,6 +198,41 @@ export interface AppUser {
   qqNumber: string
   avatar?: string
   signature: string
+}
+
+/** ===== 记忆 ===== */
+
+export type MemoryType = 'fact' | 'preference' | 'relationship' | 'event' | 'instruction' | 'reflection'
+
+export interface Memory {
+  id: string
+  characterId: string
+  conversationId?: string
+  type: MemoryType
+  content: string
+  /** 1~10，越高越容易被召回 */
+  importance: number
+  tags: string[]
+  createdAt: number
+  lastAccessed: number
+}
+
+export const MEMORY_TYPES: { id: MemoryType; label: string; color: string }[] = [
+  { id: 'fact', label: '事实', color: '#3b82f6' },
+  { id: 'preference', label: '偏好', color: '#22c55e' },
+  { id: 'relationship', label: '关系', color: '#ec4899' },
+  { id: 'event', label: '事件', color: '#f59e0b' },
+  { id: 'instruction', label: '约定', color: '#8b5cf6' },
+  { id: 'reflection', label: '印象', color: '#14b8a6' },
+]
+
+/** 用户上传的自定义表情包 */
+export interface Sticker {
+  id: string
+  name: string
+  annotation: string
+  dataUrl: string
+  createdAt: number
 }
 
 export const DEFAULT_USER: AppUser = {

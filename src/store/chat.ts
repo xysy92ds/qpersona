@@ -1,17 +1,24 @@
 import { defineStore } from 'pinia'
 import { reactive } from 'vue'
 import { db, putMessage } from '@/core/db'
-import type { Message } from '@/core/types'
+import type { FilePayload, Message, QuotePayload, Sticker } from '@/core/types'
 import type { ChatMsg, Usage } from '@/core/llm'
 import { buildChatMessages } from '@/core/prompt'
 import { streamChat } from '@/core/llm'
 import { uid, sleep } from '@/core/util'
 import { costOf, estimateTokens, resolvePrice } from '@/core/pricing'
 import { useContactsStore } from './contacts'
+import { useMemoryStore } from './memory'
 import { useSettingsStore } from './settings'
 
 /** AbortController 不进响应式 state，避免被 Proxy 包一层 */
 const controllers = new Map<string, AbortController>()
+
+function messageText(m: Message): string {
+  if (m.kind === 'sticker') return `[表情包：${m.sticker?.name ?? ''}]`
+  if (m.kind === 'file') return `[文件：${m.file?.name ?? ''}]`
+  return m.text
+}
 
 function nextTs(list: Message[]): number {
   const last = list.length ? list[list.length - 1]!.ts : 0
@@ -35,6 +42,8 @@ export const useChatStore = defineStore('chat', {
     byConv: {} as Record<string, Message[]>,
     loaded: {} as Record<string, boolean>,
     streaming: {} as Record<string, boolean>,
+    /** 对方还在回上一条时，先把新消息排上，回完再接着回 */
+    pendingReply: {} as Record<string, boolean>,
   }),
 
   getters: {
@@ -69,16 +78,13 @@ export const useChatStore = defineStore('chat', {
       controllers.get(convId)?.abort()
     },
 
-    async send(convId: string, raw: string) {
+    async send(convId: string, raw: string, quote?: QuotePayload) {
       const text = raw.trim()
-      if (!text || this.streaming[convId]) return
+      if (!text) return
 
       const contacts = useContactsStore()
-      const settings = useSettingsStore()
       const conv = contacts.conversationById(convId)
       if (!conv) return
-      const ch = contacts.characterById(conv.characterId)
-
       await this.load(convId)
       const list = (this.byConv[convId] ??= [])
 
@@ -90,11 +96,86 @@ export const useChatStore = defineStore('chat', {
         ts: nextTs(list),
         status: 'ok',
         kind: 'text',
+        ...(quote ? { quote } : {}),
       }
       await this.pushLocal(convId, userMsg)
       await contacts.touch(convId, { lastText: text, lastTs: userMsg.ts, unread: 0 })
+      if (this.streaming[convId]) {
+        this.pendingReply[convId] = true
+        return
+      }
+      await this.respond(convId)
+    },
 
+    async sendSticker(convId: string, sticker: Sticker) {
+      const contacts = useContactsStore()
+      const conv = contacts.conversationById(convId)
+      if (!conv) return
+      await this.load(convId)
+      const list = (this.byConv[convId] ??= [])
+      const msg: Message = {
+        id: uid('m'),
+        conversationId: convId,
+        role: 'user',
+        text: '',
+        ts: nextTs(list),
+        status: 'ok',
+        kind: 'sticker',
+        sticker: {
+          id: sticker.id,
+          name: sticker.name,
+          annotation: sticker.annotation,
+          url: sticker.dataUrl,
+        },
+      }
+      await this.pushLocal(convId, msg)
+      await contacts.touch(convId, { lastText: `[表情包] ${sticker.name}`, lastTs: msg.ts, unread: 0 })
+      if (this.streaming[convId]) {
+        this.pendingReply[convId] = true
+        return
+      }
+      await this.respond(convId)
+    },
+
+    async sendFile(convId: string, file: FilePayload) {
+      const contacts = useContactsStore()
+      const conv = contacts.conversationById(convId)
+      if (!conv) return
+      await this.load(convId)
+      const list = (this.byConv[convId] ??= [])
+      const msg: Message = {
+        id: uid('m'),
+        conversationId: convId,
+        role: 'user',
+        text: '',
+        ts: nextTs(list),
+        status: 'ok',
+        kind: 'file',
+        file,
+      }
+      await this.pushLocal(convId, msg)
+      await contacts.touch(convId, { lastText: `[文件] ${file.name}`, lastTs: msg.ts, unread: 0 })
+      if (this.streaming[convId]) {
+        this.pendingReply[convId] = true
+        return
+      }
+      await this.respond(convId)
+    },
+
+    /** 真正调用模型、流式写回回复的那一段 */
+    async respond(convId: string) {
+      if (this.streaming[convId]) return
+      const contacts = useContactsStore()
+      const settings = useSettingsStore()
+      const memory = useMemoryStore()
+      const conv = contacts.conversationById(convId)
+      if (!conv) return
+      const ch = contacts.characterById(conv.characterId)
       if (!ch) return
+
+      await this.load(convId)
+      const list = (this.byConv[convId] ??= [])
+
       if (!ch.ext.toggles.chat) {
         await this.pushLocal(convId, {
           id: uid('m'),
@@ -131,6 +212,18 @@ export const useChatStore = defineStore('chat', {
       }
 
       const history = list.slice(0, -1)
+      const recentQuery = history
+        .filter((m) => m.role === 'user')
+        .slice(-3)
+        .map((m) => messageText(m))
+        .join(' ')
+      let memoryText = ''
+      try {
+        memoryText = await memory.recall(ch.id, recentQuery)
+      } catch {
+        memoryText = ''
+      }
+
       let messages: ChatMsg[]
       try {
         messages = buildChatMessages({
@@ -138,6 +231,7 @@ export const useChatStore = defineStore('chat', {
           profile: conv.profile,
           history,
           userName: settings.user.nickname,
+          memoryText,
         })
       } catch (e) {
         reply.status = 'error'
@@ -229,6 +323,21 @@ export const useChatStore = defineStore('chat', {
       }
       await putMessage(reply)
       await contacts.touch(convId, { lastText: preview.slice(0, 80), lastTs: Date.now() })
+
+      // 回复期间又收到消息：接着回
+      if (this.pendingReply[convId]) {
+        this.pendingReply[convId] = false
+        void this.respond(convId)
+      }
+
+      // 后台总结记忆（每 10 轮触发，不阻塞这一轮）
+      if (reply.status === 'ok') {
+        try {
+          memory.maybeSummarize(convId)
+        } catch {
+          /* 记忆失败不影响聊天 */
+        }
+      }
     },
 
     /** 重发最后一条用户消息（清掉它之后的 assistant 消息） */

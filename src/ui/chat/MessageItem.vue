@@ -21,6 +21,15 @@ const name = computed(() => (isSelf.value ? props.userName : props.characterName
 const avatar = computed(() => (isSelf.value ? props.userAvatar || avatarSvg(props.userName) : props.characterAvatar))
 const isTip = computed(() => props.message.kind === 'tip')
 const usageText = computed(() => usageLabel(props.message))
+const isSticker = computed(() => props.message.kind === 'sticker')
+const isFile = computed(() => props.message.kind === 'file')
+
+function formatSize(n: number): string {
+  if (!n) return '0 B'
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
 
 const emit = defineEmits<{ longpress: [Message] }>()
 let timer: number | null = null
@@ -51,7 +60,12 @@ function move(e: PointerEvent) {
   <div
     v-else
     class="msg"
-    :class="{ 'msg--self': isSelf, 'msg--error': message.status === 'error', 'msg--hide-name': !showName }"
+    :class="{
+      'msg--self': isSelf,
+      'msg--error': message.status === 'error',
+      'msg--hide-name': !showName,
+      'msg--sticker': isSticker,
+    }"
     @pointerdown="down"
     @pointerup="cancel"
     @pointerleave="cancel"
@@ -59,10 +73,35 @@ function move(e: PointerEvent) {
     @contextmenu.prevent="emit('longpress', message)"
   >
     <QText :self="isSelf" :name="name" :avatar="avatar">
-      <span class="bubble-text" :class="{ 'is-error': message.status === 'error' }">
-        <template v-if="message.text">{{ message.text }}</template>
-        <span v-else-if="message.status === 'streaming'" class="dots"><i /><i /><i /></span>
-      </span>
+      <div v-if="isSticker && message.sticker" class="sticker-wrap">
+        <img class="sticker-img" :src="message.sticker.url" :alt="message.sticker.name" draggable="false" />
+      </div>
+
+      <template v-else>
+        <div v-if="message.quote" class="quote-inline">
+          <span class="quote-inline__name">{{ message.quote.name }}</span>
+          <span class="quote-inline__text">{{ message.quote.text }}</span>
+        </div>
+
+        <a
+          v-if="isFile && message.file"
+          class="file-card"
+          :href="message.file.url"
+          :download="message.file.name"
+        >
+          <span class="file-card__icon">📄</span>
+          <span class="file-card__body">
+            <span class="file-card__name">{{ message.file.name }}</span>
+            <span class="file-card__size">{{ formatSize(message.file.size) }}</span>
+          </span>
+          <span class="file-card__dl">下载</span>
+        </a>
+
+        <span v-else class="bubble-text" :class="{ 'is-error': message.status === 'error' }">
+          <template v-if="message.text">{{ message.text }}</template>
+          <span v-else-if="message.status === 'streaming'" class="dots"><i /><i /><i /></span>
+        </span>
+      </template>
     </QText>
     <div
       v-if="showUsage && !isSelf && message.usage"
@@ -105,6 +144,116 @@ function move(e: PointerEvent) {
   font-size: calc(15px * var(--fs-scale));
   line-height: 1.52;
   letter-spacing: 0.1px;
+}
+.msg--sticker :deep(.msg-content-container) {
+  background: transparent !important;
+  padding: 0 !important;
+  overflow: visible;
+}
+.msg--sticker :deep(.mix-message__container) {
+  padding: 0 !important;
+}
+.msg--sticker :deep(.message-content) {
+  padding: 0;
+}
+.msg--sticker :deep(.mix-message__inner img) {
+  width: 112px !important;
+  height: 112px !important;
+  max-width: 112px !important;
+  max-height: 112px !important;
+  object-fit: contain;
+  display: block;
+  margin: 0 !important;
+  border-radius: 6px;
+}
+.quote-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-width: 220px;
+  padding: 5px 8px;
+  margin-bottom: 5px;
+  border-left: 3px solid var(--brand);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.06);
+}
+[data-theme='dark'] .quote-inline {
+  background: rgba(255, 255, 255, 0.08);
+}
+.quote-inline__name {
+  font-size: 10px;
+  color: var(--brand);
+}
+.quote-inline__text {
+  font-size: 11px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+.msg :deep(.file-card) {
+  text-decoration: none !important;
+  color: inherit !important;
+}
+.file-card {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 210px;
+  max-width: 62vw;
+  color: inherit;
+  text-decoration: none;
+}
+.file-card__icon {
+  width: 38px;
+  height: 44px;
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #2563eb;
+  display: grid;
+  place-items: center;
+  font-size: 19px;
+  flex: none;
+}
+.file-card__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.file-card__name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-card__size {
+  font-size: 10.5px;
+  opacity: 0.65;
+}
+.file-card__dl {
+  font-size: 10.5px;
+  color: var(--brand);
+  flex: none;
+}
+.msg--self .file-card__icon {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+.msg--self .file-card__dl {
+  color: #fff;
+}
+.msg--self .quote-inline {
+  background: rgba(255, 255, 255, 0.16);
+  border-left-color: rgba(255, 255, 255, 0.9);
+}
+.msg--self .quote-inline__name {
+  color: #fff;
+}
+.msg--self .quote-inline__text {
+  color: rgba(255, 255, 255, 0.86);
 }
 .msg--error :deep(.msg-content-container) {
   background: rgba(255, 77, 79, 0.09) !important;

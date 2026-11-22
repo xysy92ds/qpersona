@@ -6,6 +6,8 @@ import {
   ChevronBack,
   ChevronForward,
   CloudDownloadOutline,
+  CloudUploadOutline,
+  ImageOutline,
   ColorPaletteOutline,
   CreateOutline,
   GridOutline,
@@ -31,6 +33,8 @@ const chat = useChatStore()
 
 const confirmClearChats = ref(false)
 const confirmWipe = ref(false)
+const confirmImport = ref(false)
+const importInput = ref<HTMLInputElement>()
 const storageText = ref('计算中…')
 
 const themes: { value: ThemeMode; label: string }[] = [
@@ -64,18 +68,22 @@ onMounted(async () => {
 })
 
 async function exportData() {
-  const [characters, conversations, messages] = await Promise.all([
+  const [characters, conversations, messages, memories, stickers] = await Promise.all([
     db.characters.toArray(),
     db.conversations.toArray(),
     db.messages.toArray(),
+    db.memories.toArray(),
+    db.stickers.toArray(),
   ])
   const payload = {
     app: 'qpersona',
-    version: '0.4.0',
+    version: '0.5.0',
     exportedAt: new Date().toISOString(),
     characters,
     conversations,
     messages,
+    memories,
+    stickers,
     settings: { ...settings.snapshot(), profiles: settings.profiles.map((p) => ({ ...p, apiKey: '' })) },
   }
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
@@ -86,6 +94,48 @@ async function exportData() {
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 4000)
   showToast('已导出对话与角色（不含 API Key）')
+}
+
+function pickImport() {
+  if (!confirmImport.value) {
+    confirmImport.value = true
+    showToast('再点一次选择文件，导入会覆盖当前数据', 2600)
+    return
+  }
+  confirmImport.value = false
+  importInput.value?.click()
+}
+
+async function importData(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  try {
+    const data = JSON.parse(await file.text())
+    if (data?.app !== 'qpersona') throw new Error('不是 Q伴 的备份文件')
+    await db.transaction(
+      'rw',
+      [db.characters, db.conversations, db.messages, db.memories, db.stickers, db.kv],
+      async () => {
+        await db.messages.clear()
+        await db.conversations.clear()
+        await db.characters.clear()
+        await db.memories.clear()
+        await db.stickers.clear()
+        if (Array.isArray(data.characters)) await db.characters.bulkPut(data.characters)
+        if (Array.isArray(data.conversations)) await db.conversations.bulkPut(data.conversations)
+        if (Array.isArray(data.messages)) await db.messages.bulkPut(data.messages)
+        if (Array.isArray(data.memories)) await db.memories.bulkPut(data.memories)
+        if (Array.isArray(data.stickers)) await db.stickers.bulkPut(data.stickers)
+        if (data.settings) await db.kv.put({ key: 'settings', value: data.settings })
+      },
+    )
+    showToast('导入完成，正在刷新…')
+    setTimeout(() => location.reload(), 600)
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : '导入失败，文件格式不对', 3200)
+  }
 }
 
 async function clearChats() {
@@ -231,6 +281,14 @@ function goBack() {
           </div>
           <ChevronForward class="chev" />
         </button>
+        <button class="cell" @click="router.push('/stickers')">
+          <div class="cell-icon" style="background: #0891b2"><ImageOutline /></div>
+          <div class="cell__body">
+            <div class="cell__title">表情包管理</div>
+            <div class="cell__desc">上传自己的表情，给 AI 写一句注解</div>
+          </div>
+          <ChevronForward class="chev" />
+        </button>
         <button class="cell" @click="settings.setChatPref('showUsage', !settings.chat.showUsage)">
           <div class="cell-icon" style="background: #14b8a6"><StatsChartOutline /></div>
           <div class="cell__body">
@@ -269,11 +327,21 @@ function goBack() {
           <div class="cell__body"><div class="cell__title">存储占用</div><div class="cell__desc">{{ counts }}</div></div>
           <span class="cell__value">{{ storageText }}</span>
         </div>
+        <button class="cell" @click="pickImport">
+          <div class="cell-icon" style="background: #6366f1"><CloudUploadOutline /></div>
+          <div class="cell__body">
+            <div class="cell__title" :style="confirmImport ? 'color: var(--danger)' : ''">
+              {{ confirmImport ? '再点一次，选择备份文件' : '导入数据' }}
+            </div>
+            <div class="cell__desc">从导出的 JSON 恢复，会覆盖当前数据</div>
+          </div>
+          <ChevronForward class="chev" />
+        </button>
         <button class="cell" @click="exportData">
           <div class="cell-icon" style="background: #10b981"><CloudDownloadOutline /></div>
           <div class="cell__body">
             <div class="cell__title">导出数据</div>
-            <div class="cell__desc">角色、会话、消息打包成 JSON</div>
+            <div class="cell__desc">角色、会话、消息、记忆、表情包打包成 JSON</div>
           </div>
           <ChevronForward class="chev" />
         </button>
@@ -301,7 +369,7 @@ function goBack() {
       <div class="sheet-block">
         <div class="cell" style="cursor: default">
           <div class="cell__body"><div class="cell__title">Q伴 / QPersona</div><div class="cell__desc">开源非商业 · 学习与演示用途</div></div>
-          <span class="cell__value">0.4.0</span>
+          <span class="cell__value">0.5.0</span>
         </div>
       </div>
 
@@ -310,6 +378,8 @@ function goBack() {
         所有「好友」均为本地 AI 角色，不连接真实 QQ 服务。
       </div>
     </div>
+
+    <input ref="importInput" type="file" accept="application/json,.json" hidden @change="importData" />
   </div>
 </template>
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { CameraOutline, ChatbubblesOutline, ChevronBack, SparklesOutline, TrashOutline } from '@vicons/ionicons5'
 import Avatar from '@/ui/common/Avatar.vue'
@@ -7,6 +7,8 @@ import BottomSheet from '@/ui/common/BottomSheet.vue'
 import { useContactsStore } from '@/store/contacts'
 import { useSettingsStore } from '@/store/settings'
 import { buildSystemPrompt } from '@/core/prompt'
+import { MEMORY_TYPES, type MemoryType } from '@/core/types'
+import { useMemoryStore } from '@/store/memory'
 import { imageToDataUrl } from '@/core/util'
 import { showToast } from '@/ui/common/toast'
 
@@ -14,11 +16,48 @@ const props = defineProps<{ id: string }>()
 const router = useRouter()
 const contacts = useContactsStore()
 const settings = useSettingsStore()
+const memory = useMemoryStore()
 
 const ch = computed(() => contacts.characterById(props.id))
 const tab = ref<'qq' | 'tavern'>('qq')
 const confirmDelete = ref(false)
 const avatarInput = ref<HTMLInputElement>()
+const memoryBusy = ref(false)
+
+const memoryList = computed(() => memory.memoriesOf(ch.value?.id))
+const memoryConv = computed(() => contacts.conversations.find((c) => c.characterId === ch.value?.id))
+
+onMounted(() => {
+  if (ch.value) void memory.load(ch.value.id)
+})
+
+function typeMeta(t: MemoryType) {
+  return MEMORY_TYPES.find((x) => x.id === t) ?? MEMORY_TYPES[0]!
+}
+
+async function summarizeMemory() {
+  if (memoryBusy.value || !ch.value) return
+  if (!memoryConv.value) {
+    showToast('先和 TA 聊几句')
+    return
+  }
+  if (!settings.profileFor('memory_summary', ch.value.ext.routing.memory_summary)) {
+    showToast('先去 AI 设置里配置记忆总结模型')
+    return
+  }
+  memoryBusy.value = true
+  try {
+    const n = await memory.summarize(memoryConv.value.id)
+    showToast(n ? `记下了 ${n} 条` : '这次没有新的可记内容')
+  } finally {
+    memoryBusy.value = false
+  }
+}
+
+async function removeMemory(id: string) {
+  await memory.remove(id)
+  showToast('已删除这条记忆')
+}
 
 const promptText = computed(() =>
   ch.value ? buildSystemPrompt(ch.value, tab.value, settings.user.nickname) : '',
@@ -166,6 +205,28 @@ function goBack() {
             <option value="">默认</option>
             <option v-for="p in settings.profiles" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
+        </div>
+      </div>
+
+      <div class="group-title mem-title">
+        记忆
+        <span class="mem-count">{{ memoryList.length }}</span>
+        <button class="mem-refresh" :disabled="memoryBusy" @click="summarizeMemory">
+          {{ memoryBusy ? '整理中…' : '立即整理' }}
+        </button>
+      </div>
+      <div class="sheet-block">
+        <div v-if="!memoryList.length" class="mem-empty">
+          聊满 10 轮会在后台自动整理；也可以点「立即整理」。整理结果会按相关度注入到提示词里。
+        </div>
+        <div v-for="m in memoryList" :key="m.id" class="mem-item">
+          <span
+            class="mem-type"
+            :style="{ color: typeMeta(m.type).color, background: typeMeta(m.type).color + '1a' }"
+          >{{ typeMeta(m.type).label }}</span>
+          <span class="mem-text">{{ m.content }}</span>
+          <span class="mem-importance" :title="`重要度 ${m.importance}/10`">{{ m.importance }}</span>
+          <button class="mem-del" aria-label="删除记忆" @click="removeMemory(m.id)">×</button>
         </div>
       </div>
 
@@ -349,6 +410,74 @@ function goBack() {
   white-space: pre-wrap;
   max-height: 300px;
   overflow-y: auto;
+}
+.mem-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mem-count {
+  font-size: 10px;
+  background: var(--bg-hover);
+  border-radius: 8px;
+  padding: 0 6px;
+  line-height: 15px;
+}
+.mem-refresh {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--brand);
+  padding: 4px 6px;
+}
+.mem-refresh:disabled {
+  opacity: 0.5;
+}
+.mem-empty {
+  padding: 14px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-3);
+}
+.mem-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.mem-item:last-child {
+  border-bottom: none;
+}
+.mem-type {
+  font-size: 9.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  flex: none;
+  margin-top: 1px;
+}
+.mem-text {
+  flex: 1;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.mem-importance {
+  font-size: 9.5px;
+  color: var(--text-3);
+  flex: none;
+  margin-top: 2px;
+}
+.mem-del {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: var(--text-3);
+  font-size: 15px;
+  line-height: 1;
+  flex: none;
+}
+.mem-del:active {
+  background: var(--bg-hover);
 }
 .route-select {
   width: 120px;

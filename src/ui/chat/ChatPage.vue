@@ -12,7 +12,7 @@ import { avatarSvg, characterAvatar } from '@/core/avatar'
 import { chatTime } from '@/core/util'
 import { showToast } from '@/ui/common/toast'
 import { ping } from '@/core/audio'
-import type { Message } from '@/core/types'
+import type { FilePayload, Message, QuotePayload, Sticker } from '@/core/types'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -55,6 +55,7 @@ const stick = ref(true)
 const sheet = ref(false)
 const msgMenu = ref(false)
 const activeMsg = ref<Message | null>(null)
+const quoting = ref<QuotePayload | null>(null)
 const msgConfirm = ref(false)
 let armed = false
 const spoken = new Set<string>()
@@ -116,7 +117,32 @@ function goBack() {
 
 async function send(text: string) {
   stick.value = true
-  await chat.send(props.id, text)
+  const q = quoting.value
+  quoting.value = null
+  await chat.send(props.id, text, q ?? undefined)
+}
+
+async function sendSticker(sticker: Sticker) {
+  stick.value = true
+  await chat.sendSticker(props.id, sticker)
+}
+
+async function sendFile(file: FilePayload) {
+  stick.value = true
+  await chat.sendFile(props.id, file)
+}
+
+function quoteMessage() {
+  const m = activeMsg.value
+  if (!m) return
+  quoting.value = {
+    id: m.id,
+    role: m.role === 'assistant' ? 'assistant' : 'user',
+    name: m.role === 'assistant' ? ch.value?.ext.qq.nickname || title.value : settings.user.nickname,
+    text: m.text || (m.kind === 'sticker' ? `[表情包] ${m.sticker?.name}` : m.kind === 'file' ? `[文件] ${m.file?.name}` : ''),
+  }
+  msgMenu.value = false
+  nextTick(() => document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus())
 }
 
 async function switchProfile(target: 'qq' | 'tavern') {
@@ -259,9 +285,24 @@ async function poke() {
       <div class="chat-list__pad" />
     </div>
 
-    <Composer :streaming="streaming" @send="send" @stop="chat.stop(props.id)" @poke="poke" />
+    <Composer
+      :streaming="streaming"
+      :quote="quoting"
+      @send="send"
+      @stop="chat.stop(props.id)"
+      @poke="poke"
+      @sticker="sendSticker"
+      @file="sendFile"
+      @close-quote="quoting = null"
+    />
 
     <BottomSheet v-model="msgMenu" title="消息">
+      <button class="cell" @click="quoteMessage">
+        <span class="cell__body">
+          <span class="cell__title">引用</span>
+          <span class="cell__desc">回消息时带上这一段</span>
+        </span>
+      </button>
       <button class="cell" @click="copyMsg">
         <span class="cell__body"><span class="cell__title">复制</span></span>
       </button>

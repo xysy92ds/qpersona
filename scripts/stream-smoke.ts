@@ -41,6 +41,7 @@ const chat = useChatStore()
 
 await settings.load()
 await contacts.load()
+await settings.setFlag('memory', false)
 const profile = await settings.addProfile({
   name: '假模型',
   baseUrl: 'http://127.0.0.1:18080/v1',
