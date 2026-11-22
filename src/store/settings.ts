@@ -4,13 +4,39 @@ import { DEFAULT_USER } from '@/core/types'
 import { kvGet, kvSet } from '@/core/db'
 import { uid } from '@/core/util'
 
-export type ThemeMode = 'light' | 'dark'
+export type ThemeMode = 'light' | 'dark' | 'auto'
+export type FontScale = 'small' | 'normal' | 'large'
+export type BubbleStyle = 'classic' | 'mint' | 'sunset'
+
+export interface Flags {
+  memory: boolean
+  groupInterest: boolean
+  tts: boolean
+  notify: boolean
+  sound: boolean
+}
+
+export interface Appearance {
+  fontScale: FontScale
+  bubble: BubbleStyle
+}
+
+export interface ChatPrefs {
+  /** 模型回多行时自动拆成几条 QQ 消息 */
+  autoSplit: boolean
+  /** 聊天里显示时间分隔 */
+  showTime: boolean
+  /** 每条回复下面显示 token 用量与估算花费 */
+  showUsage: boolean
+}
 
 interface PersistedSettings {
   profiles: ApiProfile[]
   bindings: Partial<Record<SlotId, string>>
   theme: ThemeMode
-  flags: { memory: boolean; groupInterest: boolean; tts: boolean; notify: boolean }
+  flags: Flags
+  appearance: Appearance
+  chat: ChatPrefs
   user: AppUser
 }
 
@@ -18,13 +44,18 @@ const DEFAULTS: PersistedSettings = {
   profiles: [],
   bindings: {},
   theme: 'light',
-  flags: { memory: true, groupInterest: true, tts: false, notify: true },
+  flags: { memory: true, groupInterest: true, tts: false, notify: true, sound: true },
+  appearance: { fontScale: 'normal', bubble: 'classic' },
+  chat: { autoSplit: true, showTime: true, showUsage: true },
   user: DEFAULT_USER,
 }
+
+let mediaCleanup: (() => void) | null = null
 
 export const useSettingsStore = defineStore('settings', {
   state: () => ({
     loaded: false,
+    systemDark: false,
     ...structuredClone(DEFAULTS),
   }),
 
@@ -41,12 +72,12 @@ export const useSettingsStore = defineStore('settings', {
           const found = state.profiles.find((p) => p.id === id)
           if (found) return found
         }
-        if (slot === 'memory_summary') return state.profiles.find((p) => p.id === state.bindings.text_main) ?? state.profiles[0] ?? null
+        // memory_summary / 其他槽位留空 → 复用 text_main
         return state.profiles.find((p) => p.id === state.bindings.text_main) ?? state.profiles[0] ?? null
       }
     },
-    themeClass(state): string {
-      return state.theme === 'dark' ? 'dark' : ''
+    isDark(state): boolean {
+      return state.theme === 'auto' ? !!state.systemDark : state.theme === 'dark'
     },
   },
 
@@ -57,9 +88,25 @@ export const useSettingsStore = defineStore('settings', {
       this.bindings = saved.bindings ?? {}
       this.theme = saved.theme ?? 'light'
       this.flags = { ...DEFAULTS.flags, ...(saved.flags ?? {}) }
+      this.appearance = { ...DEFAULTS.appearance, ...(saved.appearance ?? {}) }
+      this.chat = { ...DEFAULTS.chat, ...(saved.chat ?? {}) }
       this.user = { ...DEFAULT_USER, ...(saved.user ?? {}) }
       this.loaded = true
-      this.applyTheme()
+
+      // 跟随系统时，系统切换要实时生效
+      if (typeof matchMedia !== 'undefined') {
+        const mq = matchMedia('(prefers-color-scheme: dark)')
+        this.systemDark = mq.matches
+        if (!mediaCleanup) {
+          const onChange = () => {
+            this.systemDark = mq.matches
+            this.applyAppearance()
+          }
+          mq.addEventListener('change', onChange)
+          mediaCleanup = () => mq.removeEventListener('change', onChange)
+        }
+      }
+      this.applyAppearance()
     },
 
     snapshot(): PersistedSettings {
@@ -68,6 +115,8 @@ export const useSettingsStore = defineStore('settings', {
         bindings: this.bindings,
         theme: this.theme,
         flags: { ...this.flags },
+        appearance: { ...this.appearance },
+        chat: { ...this.chat },
         user: { ...this.user },
       }
     },
@@ -76,19 +125,45 @@ export const useSettingsStore = defineStore('settings', {
       await kvSet('settings', this.snapshot())
     },
 
-    applyTheme() {
+    applyAppearance() {
+      if (typeof document === 'undefined') return
       const el = document.documentElement
-      el.dataset.theme = this.theme
-      el.classList.toggle('dark', this.theme === 'dark')
+      const dark = this.isDark
+      el.dataset.theme = dark ? 'dark' : 'light'
+      el.classList.toggle('dark', dark)
+      el.dataset.font = this.appearance.fontScale
+      el.dataset.bubble = this.appearance.bubble
+      el.style.colorScheme = dark ? 'dark' : 'light'
     },
 
     async setTheme(t: ThemeMode) {
       this.theme = t
-      this.applyTheme()
+      this.applyAppearance()
       await this.persist()
     },
 
-    async setFlag(key: keyof PersistedSettings['flags'], value: boolean) {
+    async toggleTheme() {
+      await this.setTheme(this.isDark ? 'light' : 'dark')
+    },
+
+    async setFontScale(v: FontScale) {
+      this.appearance.fontScale = v
+      this.applyAppearance()
+      await this.persist()
+    },
+
+    async setBubble(v: BubbleStyle) {
+      this.appearance.bubble = v
+      this.applyAppearance()
+      await this.persist()
+    },
+
+    async setChatPref<K extends keyof ChatPrefs>(key: K, value: ChatPrefs[K]) {
+      this.chat[key] = value
+      await this.persist()
+    },
+
+    async setFlag(key: keyof Flags, value: boolean) {
       this.flags[key] = value
       await this.persist()
     },

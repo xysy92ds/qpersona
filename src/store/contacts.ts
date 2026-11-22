@@ -3,7 +3,7 @@ import { db, putCharacter, putConversation, putMessage } from '@/core/db'
 import type { CardData, Character, ContextProfileId, Conversation, PersonaExt } from '@/core/types'
 import { greetingFor } from '@/core/prompt'
 import { uid } from '@/core/util'
-import { makeDemoCharacter } from '@/core/demo'
+import { DEMO_THREAD, makeDemoCharacter } from '@/core/demo'
 
 export const useContactsStore = defineStore('contacts', {
   state: () => ({
@@ -46,7 +46,27 @@ export const useContactsStore = defineStore('contacts', {
       const demo = makeDemoCharacter()
       await putCharacter(demo)
       this.characters.push(demo)
-      await this.ensureConversation(demo.id, 'qq')
+      // 预置一小段对话，新装的应用打开就能看到完整样式（开场白在最前面）
+      const base = Date.now() - 16 * 60 * 1000
+      const conv = await this.ensureConversation(demo.id, 'qq', 0, base)
+      let i = 1
+      for (const m of DEMO_THREAD) {
+        await putMessage({
+          id: uid('m'),
+          conversationId: conv.id,
+          role: m.role,
+          characterId: m.role === 'assistant' ? demo.id : undefined,
+          text: m.text,
+          ts: base + i * 45_000,
+          status: 'ok',
+          kind: 'text',
+        })
+        i++
+      }
+      const last = DEMO_THREAD[DEMO_THREAD.length - 1]
+      if (last) {
+        await this.touch(conv.id, { lastText: last.text, lastTs: base + (i - 1) * 45_000 })
+      }
     },
 
     async addCharacter(card: CardData, ext: PersonaExt): Promise<Character> {
@@ -84,6 +104,7 @@ export const useContactsStore = defineStore('contacts', {
       characterId: string,
       profile: ContextProfileId = 'qq',
       greetingIndex = 0,
+      startAt?: number,
     ): Promise<Conversation> {
       const found = this.conversations.find(
         (c) => c.kind === 'single' && c.characterId === characterId && c.profile === profile,
@@ -92,7 +113,7 @@ export const useContactsStore = defineStore('contacts', {
 
       const ch = this.characterById(characterId)
       if (!ch) throw new Error('角色不存在')
-      const now = Date.now()
+      const now = startAt ?? Date.now()
       const greeting = greetingFor(ch, greetingIndex)
       const conv: Conversation = {
         id: uid('conv'),

@@ -47,6 +47,9 @@ export interface ApiProfile {
   model: string
   temperature?: number
   maxTokens?: number
+  /** 自定义单价：元 / 百万 tokens，留空则按模型名内置估算 */
+  priceIn?: number
+  priceOut?: number
   createdAt: number
 }
 
@@ -131,6 +134,8 @@ export interface Conversation {
   lastTs: number
   unread: number
   pinned: boolean
+  /** 消息免打扰：列表里不显示红点，只留一个小图标 */
+  muted?: boolean
   createdAt: number
 }
 
@@ -149,6 +154,12 @@ export interface Message {
   /** tip = 系统灰条 / 时间提示 */
   kind?: 'text' | 'tip'
   error?: string
+  /** 这一次回复的 token 用量（assistant 消息才有） */
+  usage?: { prompt: number; completion: number; total: number }
+  /** 按单价估算的花费（元） */
+  cost?: number
+  /** 用量是不是估算出来的 */
+  usageEstimated?: boolean
 }
 
 export interface AppUser {

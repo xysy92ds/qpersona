@@ -7,12 +7,20 @@ export interface ChatMsg {
   content: string
 }
 
+export interface Usage {
+  prompt_tokens?: number
+  completion_tokens?: number
+  total_tokens?: number
+}
+
 export interface ChatOptions {
   profile: ApiProfile
   messages: ChatMsg[]
   signal?: AbortSignal
   temperature?: number
   maxTokens?: number
+  /** 供应商在流末尾回传的真实用量（部分兼容接口不返回） */
+  onUsage?: (usage: Usage) => void
 }
 
 function headersOf(profile: ApiProfile): Record<string, string> {
@@ -50,20 +58,30 @@ async function httpError(res: Response): Promise<Error> {
  */
 export async function* streamChat(opts: ChatOptions): AsyncGenerator<string, void, unknown> {
   const { profile, messages, signal } = opts
-  const res = await fetch(completionsEndpoint(profile.baseUrl), {
-    method: 'POST',
-    headers: headersOf(profile),
-    signal,
-    body: JSON.stringify({
-      model: profile.model,
-      messages,
-      stream: true,
-      temperature: opts.temperature ?? profile.temperature ?? 0.9,
-      ...(opts.maxTokens ?? profile.maxTokens
-        ? { max_tokens: opts.maxTokens ?? profile.maxTokens }
-        : {}),
-    }),
-  })
+
+  const send = (withUsage: boolean) =>
+    fetch(completionsEndpoint(profile.baseUrl), {
+      method: 'POST',
+      headers: headersOf(profile),
+      signal,
+      body: JSON.stringify({
+        model: profile.model,
+        messages,
+        stream: true,
+        ...(withUsage ? { stream_options: { include_usage: true } } : {}),
+        temperature: opts.temperature ?? profile.temperature ?? 0.9,
+        ...(opts.maxTokens ?? profile.maxTokens
+          ? { max_tokens: opts.maxTokens ?? profile.maxTokens }
+          : {}),
+      }),
+    })
+
+  let res = await send(true)
+  // 个别 OpenAI 兼容接口不认 stream_options，只在明确报错时降级重试一次
+  if (!res.ok && res.status >= 400 && res.status < 500) {
+    const detail = await res.clone().text().catch(() => '')
+    if (/stream_options/i.test(detail)) res = await send(false)
+  }
   if (!res.ok) throw await httpError(res)
   if (!res.body) throw new Error('接口没有返回可读的流式响应')
 
@@ -81,6 +99,7 @@ export async function* streamChat(opts: ChatOptions): AsyncGenerator<string, voi
       }
       try {
         const json = JSON.parse(ev.data)
+        if (json?.usage) opts.onUsage?.(json.usage)
         const choice = json?.choices?.[0]
         const delta = choice?.delta?.content ?? choice?.message?.content ?? ''
         if (delta) queue.push(delta)

@@ -6,7 +6,7 @@
 import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 
-const el = { dataset: {} as Record<string, string>, classList: { toggle() {} } }
+const el = { dataset: {} as Record<string, string>, classList: { toggle() {} }, style: {} as Record<string, string> }
 // settings.applyTheme 只需要一个 documentElement
 ;(globalThis as any).document = { documentElement: el }
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { CallOutline, ChevronBack, EllipsisHorizontal } from '@vicons/ionicons5'
+import { ChevronBack, EllipsisHorizontal, VolumeHighOutline, VolumeMuteOutline } from '@vicons/ionicons5'
 import MessageItem from './MessageItem.vue'
 import Composer from './Composer.vue'
 import BottomSheet from '@/ui/common/BottomSheet.vue'
@@ -11,6 +11,7 @@ import { useSettingsStore } from '@/store/settings'
 import { avatarSvg, characterAvatar } from '@/core/avatar'
 import { chatTime } from '@/core/util'
 import { showToast } from '@/ui/common/toast'
+import { ping } from '@/core/audio'
 import type { Message } from '@/core/types'
 
 const props = defineProps<{ id: string }>()
@@ -40,7 +41,7 @@ const items = computed<Item[]>(() => {
   const out: Item[] = []
   let lastTs = 0
   for (const m of msgs.value) {
-    if (!lastTs || m.ts - lastTs > 5 * 60 * 1000) {
+    if (settings.chat.showTime && (!lastTs || m.ts - lastTs > 5 * 60 * 1000)) {
       out.push({ key: 't' + m.id, type: 'time', text: chatTime(m.ts) })
     }
     out.push({ key: m.id, type: 'msg', msg: m })
@@ -52,6 +53,11 @@ const items = computed<Item[]>(() => {
 const listEl = ref<HTMLElement>()
 const stick = ref(true)
 const sheet = ref(false)
+const msgMenu = ref(false)
+const activeMsg = ref<Message | null>(null)
+const msgConfirm = ref(false)
+let armed = false
+const spoken = new Set<string>()
 
 function onScroll() {
   const el = listEl.value
@@ -86,10 +92,12 @@ watch(
 
 async function enter() {
   if (!conv.value) return
+  armed = false
   await chat.load(props.id)
   await contacts.markRead(props.id)
   await nextTick()
   scrollBottom(true)
+  window.setTimeout(() => (armed = true), 350)
 }
 
 onMounted(enter)
@@ -128,6 +136,84 @@ async function regenerate() {
   sheet.value = false
   await chat.regenerate(props.id)
 }
+
+/* ---- 语音朗读 ---- */
+function speak(text: string) {
+  if (!('speechSynthesis' in window)) {
+    showToast('这个浏览器不支持朗读')
+    return
+  }
+  speechSynthesis.cancel()
+  const u = new SpeechSynthesisUtterance(text.replace(/[*#`_~]/g, ''))
+  u.lang = 'zh-CN'
+  u.rate = 1.03
+  u.pitch = 1.04
+  speechSynthesis.speak(u)
+}
+
+async function toggleTts() {
+  const on = !settings.flags.tts
+  await settings.setFlag('tts', on)
+  if (!on) speechSynthesis?.cancel()
+  showToast(on ? '新回复会自动朗读' : '已关闭语音朗读')
+}
+
+watch(
+  () => {
+    const m = msgs.value[msgs.value.length - 1]
+    return m ? `${m.id}:${m.status}:${m.text.length}` : ''
+  },
+  () => {
+    const m = msgs.value[msgs.value.length - 1]
+    if (!armed || !m || !settings.flags.tts) return
+    if (m.role !== 'assistant' || m.status !== 'ok' || !m.text.trim()) return
+    if (spoken.has(m.id)) return
+    spoken.add(m.id)
+    if (settings.flags.notify && settings.flags.sound) ping()
+    speak(m.text)
+  },
+)
+
+onUnmounted(() => {
+  if ('speechSynthesis' in window) speechSynthesis.cancel()
+})
+
+/* ---- 消息长按 ---- */
+function openMsgMenu(m: Message) {
+  activeMsg.value = m
+  msgConfirm.value = false
+  msgMenu.value = true
+}
+
+function copyMsg() {
+  const t = activeMsg.value?.text || ''
+  navigator.clipboard
+    ?.writeText(t)
+    .then(() => showToast('已复制'))
+    .catch(() => showToast('复制失败'))
+  msgMenu.value = false
+}
+
+function readMsg() {
+  if (activeMsg.value?.text) speak(activeMsg.value.text)
+  msgMenu.value = false
+}
+
+async function removeMsg() {
+  if (!activeMsg.value) return
+  if (!msgConfirm.value) {
+    msgConfirm.value = true
+    return
+  }
+  await chat.deleteMessage(props.id, activeMsg.value.id)
+  msgMenu.value = false
+  showToast('已删除')
+}
+
+async function poke() {
+  if (!conv.value) return
+  await chat.addTip(props.id, `你拍了拍「${title.value}」`)
+}
 </script>
 
 <template>
@@ -138,8 +224,14 @@ async function regenerate() {
         <div class="topbar__title">{{ title }}</div>
         <div class="topbar__sub">{{ subtitle }}</div>
       </div>
-      <button class="iconbtn" aria-label="语音通话" @click="showToast('语音通话 · 即将推出')">
-        <CallOutline />
+      <button
+        class="iconbtn"
+        :style="settings.flags.tts ? 'color: var(--brand)' : ''"
+        aria-label="语音朗读"
+        @click="toggleTts"
+      >
+        <VolumeHighOutline v-if="settings.flags.tts" />
+        <VolumeMuteOutline v-else />
       </button>
       <button class="iconbtn" aria-label="更多" @click="sheet = true"><EllipsisHorizontal /></button>
     </header>
@@ -160,12 +252,36 @@ async function regenerate() {
           "
           :user-name="settings.user.nickname"
           :user-avatar="userAvatar"
+          :show-usage="settings.chat.showUsage"
+          @longpress="openMsgMenu"
         />
       </template>
       <div class="chat-list__pad" />
     </div>
 
-    <Composer :streaming="streaming" @send="send" @stop="chat.stop(props.id)" />
+    <Composer :streaming="streaming" @send="send" @stop="chat.stop(props.id)" @poke="poke" />
+
+    <BottomSheet v-model="msgMenu" title="消息">
+      <button class="cell" @click="copyMsg">
+        <span class="cell__body"><span class="cell__title">复制</span></span>
+      </button>
+      <button class="cell" @click="readMsg">
+        <span class="cell__body"><span class="cell__title">朗读这条</span></span>
+      </button>
+      <button class="cell" @click="msgMenu = false; regenerate()">
+        <span class="cell__body">
+          <span class="cell__title">重新生成</span>
+          <span class="cell__desc">把最后一条回复重写一遍</span>
+        </span>
+      </button>
+      <button class="cell" @click="removeMsg">
+        <span class="cell__body">
+          <span class="cell__title" style="color: var(--danger)">
+            {{ msgConfirm ? '再点一次，确认删除' : '删除' }}
+          </span>
+        </span>
+      </button>
+    </BottomSheet>
 
     <BottomSheet v-model="sheet" title="聊天设置">
       <button class="cell" @click="regenerate">
@@ -219,6 +335,7 @@ async function regenerate() {
   flex: 1;
   min-width: 0;
   padding: 0 4px;
+  text-align: center;
 }
 .chat-list {
   --qq-avatar_size_2: 38px;

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChatbubblesOutline, ChevronBack, MoonOutline, SparklesOutline, TrashOutline } from '@vicons/ionicons5'
+import { ChatbubblesOutline, ChevronBack, SparklesOutline, TrashOutline } from '@vicons/ionicons5'
 import Avatar from '@/ui/common/Avatar.vue'
 import BottomSheet from '@/ui/common/BottomSheet.vue'
 import { useContactsStore } from '@/store/contacts'
@@ -33,6 +33,16 @@ async function toggle(key: 'chat' | 'memory') {
   const ext = { ...ch.value.ext, toggles: { ...ch.value.ext.toggles, [key]: !ch.value.ext.toggles[key] } }
   await contacts.updateCharacter(ch.value.id, { ext })
   showToast(key === 'chat' ? (ext.toggles.chat ? '已开启主对话' : '已关闭主对话，不会再调用模型') : ext.toggles.memory ? '已开启记忆总结' : '已关闭记忆总结')
+}
+
+async function onRoute(e: Event) {
+  if (!ch.value) return
+  const v = (e.target as HTMLSelectElement).value
+  const routing = { ...ch.value.ext.routing }
+  if (v) routing.text_main = v
+  else delete routing.text_main
+  await contacts.updateCharacter(ch.value.id, { ext: { ...ch.value.ext, routing } })
+  showToast(v ? '已为该角色单独指定模型' : '已恢复全局主对话模型')
 }
 
 async function doDelete() {
@@ -110,13 +120,16 @@ function goBack() {
           </div>
           <span class="switch" :class="{ on: ch.ext.toggles.memory }" />
         </button>
-        <button class="cell" @click="settings.setTheme(settings.theme === 'dark' ? 'light' : 'dark')">
+        <div class="cell" style="cursor: default">
           <div class="cell__body">
-            <div class="cell__title">深色模式快捷开关</div>
-            <div class="cell__desc">和设置里的开关是同一个</div>
+            <div class="cell__title">这个角色用的模型</div>
+            <div class="cell__desc">留空就用全局主对话</div>
           </div>
-          <MoonOutline class="chev" />
-        </button>
+          <select class="select route-select" :value="ch.ext.routing.text_main || ''" @change="onRoute">
+            <option value="">默认</option>
+            <option v-for="p in settings.profiles" :key="p.id" :value="p.id">{{ p.name }}</option>
+          </select>
+        </div>
       </div>
 
       <div class="group-title">双端提示词（调度层实际注入的内容）</div>
@@ -166,7 +179,7 @@ function goBack() {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  background: var(--bg-page);
 }
 .scroll {
   padding-bottom: 24px;
@@ -274,6 +287,12 @@ function goBack() {
   white-space: pre-wrap;
   max-height: 300px;
   overflow-y: auto;
+}
+.route-select {
+  width: 120px;
+  padding: 7px 9px;
+  font-size: 12.5px;
+  flex: none;
 }
 .foot {
   text-align: center;

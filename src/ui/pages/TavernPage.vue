@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChevronBack, SparklesOutline } from '@vicons/ionicons5'
+import { AddOutline, SparklesOutline } from '@vicons/ionicons5'
 import Avatar from '@/ui/common/Avatar.vue'
 import { useContactsStore } from '@/store/contacts'
 
@@ -13,39 +13,38 @@ async function enter(characterId: string) {
   const conv = await contacts.ensureConversation(characterId, 'tavern')
   router.push(`/chat/${conv.id}`)
 }
-
-function goBack() {
-  router.replace('/')
-}
 </script>
 
 <template>
-  <div class="tavern">
-    <header class="topbar tavern-head">
-      <button class="iconbtn" aria-label="返回" @click="goBack"><ChevronBack /></button>
+  <div class="page">
+    <header class="topbar">
       <div class="topbar__title">酒馆</div>
-      <div style="width: 36px" />
+      <button class="iconbtn" aria-label="添加角色" @click="router.push('/add')"><AddOutline /></button>
     </header>
 
     <div class="scroll">
       <div class="intro">
-        <SparklesOutline class="intro__icon" />
-        <div class="intro__title">同一批角色，换一套语法</div>
-        <div class="intro__text">
-          酒馆端与 QQ 端共用角色卡和记忆，但注入不同的提示词：这里允许长叙述、动作与场景描写。
-          从 QQ 切过来时，角色记得你们聊过什么。
+        <div class="intro__badge"><SparklesOutline /></div>
+        <div class="intro__body">
+          <div class="intro__title">同一个角色，换一套语法</div>
+          <div class="intro__text">
+            这里允许长叙述、动作和场景描写。角色卡与 QQ 端共享，切回来时 TA 还记得你们聊过什么。
+          </div>
         </div>
       </div>
 
-      <div class="grid">
+      <div class="group-title">可进入叙事的好友 · {{ list.length }}</div>
+      <div class="list">
         <button v-for="ch in list" :key="ch.id" class="card" @click="enter(ch.id)">
-          <Avatar :name="ch.card.name" :src="ch.ext.qq.avatar" :size="56" round />
-          <div class="card__name">{{ ch.card.name }}</div>
-          <div class="card__desc">{{ ch.card.description || ch.ext.qq.signature || '一张还没有写简介的卡' }}</div>
-          <div class="card__tags">
-            <span v-for="t in (ch.card.tags || []).slice(0, 3)" :key="t">#{{ t }}</span>
+          <Avatar :name="ch.card.name" :src="ch.ext.qq.avatar" :size="52" />
+          <div class="card__body">
+            <div class="card__name">{{ ch.card.name }}</div>
+            <div class="card__desc">{{ ch.card.description || ch.ext.qq.signature || '一张还没有写简介的卡' }}</div>
+            <div class="card__tags">
+              <span v-for="t in (ch.card.tags || []).slice(0, 3)" :key="t">#{{ t }}</span>
+            </div>
           </div>
-          <div class="card__cta">进入叙事 →</div>
+          <span class="card__cta">叙事 ›</span>
         </button>
       </div>
 
@@ -59,111 +58,120 @@ function goBack() {
 </template>
 
 <style scoped>
-.tavern {
+.page {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background:
-    radial-gradient(90% 60% at 50% 0%, rgba(255, 186, 116, 0.18), transparent 70%),
-    linear-gradient(180deg, #1a1410 0%, #120e0b 100%);
-  color: #f3e7da;
-}
-.tavern-head {
-  background: transparent;
-  border-bottom: 1px solid rgba(255, 214, 170, 0.1);
-}
-.tavern-head .topbar__title {
-  color: #ffd9a8;
-  letter-spacing: 2px;
-}
-.tavern-head :deep(.iconbtn) {
-  color: #ffd9a8;
+  background: var(--bg-page);
 }
 .scroll {
-  padding-bottom: 24px;
+  padding-bottom: 18px;
 }
 .intro {
-  margin: 18px 16px 6px;
-  padding: 18px 16px;
+  display: flex;
+  gap: 12px;
+  margin: 10px 14px 2px;
+  padding: 16px;
   border-radius: 16px;
-  background: linear-gradient(160deg, rgba(255, 196, 128, 0.14), rgba(255, 255, 255, 0.02));
-  border: 1px solid rgba(255, 210, 160, 0.14);
+  background: linear-gradient(135deg, rgba(255, 170, 92, 0.16), rgba(255, 228, 196, 0.32));
+  border: 1px solid rgba(255, 170, 92, 0.18);
 }
-.intro__icon {
-  width: 22px;
-  height: 22px;
-  color: #ffc47a;
-  margin-bottom: 8px;
+.intro__badge {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #ffb066, #ff8a3d);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.intro__badge svg {
+  width: 21px;
+  height: 21px;
 }
 .intro__title {
-  font-size: 16px;
+  font-size: 14.5px;
   font-weight: 600;
-  color: #ffe0b8;
+  color: #7a3c10;
 }
 .intro__text {
   font-size: 12px;
-  line-height: 1.7;
-  color: rgba(243, 231, 218, 0.68);
-  margin-top: 7px;
+  line-height: 1.65;
+  color: #8a5a34;
+  margin-top: 5px;
 }
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  padding: 12px;
+[data-theme='dark'] .intro {
+  background: linear-gradient(135deg, rgba(255, 170, 92, 0.12), rgba(90, 60, 30, 0.2));
 }
-.card {
-  text-align: left;
-  border-radius: 16px;
-  padding: 14px 12px;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 210, 160, 0.1);
+[data-theme='dark'] .intro__title {
+  color: #ffcf9e;
+}
+[data-theme='dark'] .intro__text {
+  color: #c9a582;
+}
+.group-title {
+  padding: 18px 20px 8px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.list {
+  padding: 0 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-height: 190px;
+  gap: 8px;
+}
+.card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--bg-sheet);
+  border: 1px solid var(--line);
 }
 .card:active {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-hover);
+}
+.card__body {
+  flex: 1;
+  min-width: 0;
 }
 .card__name {
-  font-size: 15px;
+  font-size: 15.5px;
   font-weight: 600;
-  margin-top: 4px;
 }
 .card__desc {
-  font-size: 11px;
+  font-size: 11.5px;
   line-height: 1.55;
-  color: rgba(243, 231, 218, 0.6);
+  color: var(--text-3);
+  margin-top: 3px;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  flex: 1;
 }
 .card__tags {
   display: flex;
   gap: 5px;
   flex-wrap: wrap;
+  margin-top: 5px;
 }
 .card__tags span {
   font-size: 10px;
-  color: #ffc47a;
-  opacity: 0.8;
+  color: #d97706;
 }
 .card__cta {
-  font-size: 11.5px;
-  color: #ffc47a;
-  margin-top: 2px;
+  font-size: 12px;
+  color: #d97706;
+  flex: none;
 }
 .foot {
   text-align: center;
   font-size: 10.5px;
-  color: rgba(243, 231, 218, 0.35);
-  padding: 18px;
-}
-.empty {
-  color: rgba(243, 231, 218, 0.5);
+  color: var(--text-3);
+  padding: 20px;
 }
 </style>

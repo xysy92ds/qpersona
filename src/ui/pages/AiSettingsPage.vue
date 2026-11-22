@@ -22,6 +22,8 @@ const form = reactive({
   apiKey: '',
   model: '',
   temperature: 0.9,
+  priceIn: '',
+  priceOut: '',
 })
 
 const isEdit = computed(() => !!form.id)
@@ -34,7 +36,16 @@ const presets = [
 ]
 
 function openNew() {
-  Object.assign(form, { id: '', name: '', baseUrl: '', apiKey: '', model: '', temperature: 0.9 })
+  Object.assign(form, {
+    id: '',
+    name: '',
+    baseUrl: '',
+    apiKey: '',
+    model: '',
+    temperature: 0.9,
+    priceIn: '',
+    priceOut: '',
+  })
   deleting.value = false
   showEditor.value = true
 }
@@ -47,6 +58,8 @@ function openEdit(p: ApiProfile) {
     apiKey: p.apiKey,
     model: p.model,
     temperature: p.temperature ?? 0.9,
+    priceIn: p.priceIn != null ? String(p.priceIn) : '',
+    priceOut: p.priceOut != null ? String(p.priceOut) : '',
   })
   deleting.value = false
   showEditor.value = true
@@ -72,12 +85,18 @@ function valid(): boolean {
 
 async function save() {
   if (!valid()) return
+  const num = (v: string) => {
+    const n = parseFloat(v)
+    return Number.isFinite(n) && n >= 0 ? n : undefined
+  }
   const payload = {
     name: form.name.trim() || form.model.trim(),
     baseUrl: form.baseUrl.trim(),
     apiKey: form.apiKey.trim(),
     model: form.model.trim(),
     temperature: form.temperature,
+    priceIn: num(form.priceIn),
+    priceOut: num(form.priceOut),
   }
   if (isEdit.value) await settings.updateProfile(form.id, payload)
   else await settings.addProfile(payload)
@@ -183,7 +202,7 @@ const boundSlots = computed(() => {
             <div class="cell__desc">{{ s.desc }}</div>
           </div>
           <select class="select slot-row__select" :value="settings.bindings[s.id] || ''" @change="onBind(s.id, $event)">
-            <option value="">默认{{ s.id === 'memory_summary' ? '（同主对话）' : '' }}</option>
+            <option value="">默认</option>
             <option v-for="p in settings.profiles" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
         </div>
@@ -215,6 +234,19 @@ const boundSlots = computed(() => {
         <span class="field__label">模型名</span>
         <input v-model="form.model" class="input" placeholder="deepseek-chat" />
       </label>
+      <div class="price-row">
+        <label class="field">
+          <span class="field__label">输入单价</span>
+          <input v-model="form.priceIn" class="input" inputmode="decimal" placeholder="元 / 百万 tokens" />
+        </label>
+        <label class="field">
+          <span class="field__label">输出单价</span>
+          <input v-model="form.priceOut" class="input" inputmode="decimal" placeholder="留空自动估算" />
+        </label>
+      </div>
+      <div class="hint">
+        单价用来估算每条回复的花费，只在本机计算。留空时按模型名内置价目估算（例如 deepseek-chat 约 ¥2 / ¥8）。
+      </div>
       <label class="field">
         <span class="field__label">温度 {{ form.temperature.toFixed(1) }}</span>
         <input v-model.number="form.temperature" class="range" type="range" min="0" max="2" step="0.1" />
@@ -223,7 +255,7 @@ const boundSlots = computed(() => {
       <template #footer>
         <button v-if="isEdit" class="btn btn--danger" @click="remove">
           <TrashOutline />
-          {{ deleting ? '确认删除' : '' }}
+          {{ deleting ? '确认删除' : '删除' }}
         </button>
         <button class="btn btn--ghost" :disabled="testing" @click="test">{{ testing ? '测试中…' : '测试' }}</button>
         <button class="btn" @click="save">保存</button>
@@ -238,7 +270,7 @@ const boundSlots = computed(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  background: var(--bg-page);
 }
 .scroll {
   padding-bottom: 20px;
@@ -388,6 +420,14 @@ const boundSlots = computed(() => {
 .preset:active {
   background: rgba(0, 153, 255, 0.14);
   color: var(--brand);
+}
+.price-row {
+  display: flex;
+  gap: 2px;
+}
+.price-row .field {
+  flex: 1;
+  min-width: 0;
 }
 .range {
   width: 100%;

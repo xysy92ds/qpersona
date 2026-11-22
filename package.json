@@ -1,7 +1,7 @@
 {
   "name": "qpersona",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.3.0",
   "type": "module",
   "description": "Q 伴 / QPersona —— 以 QQ 为外壳、以 AI 角色扮演为内核的本地优先聊天应用",
   "scripts": {

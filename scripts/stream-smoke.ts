@@ -7,7 +7,7 @@ import 'fake-indexeddb/auto'
 import http from 'node:http'
 import { createPinia, setActivePinia } from 'pinia'
 
-;(globalThis as any).document = { documentElement: { dataset: {}, classList: { toggle() {} } } }
+;(globalThis as any).document = { documentElement: { dataset: {}, classList: { toggle() {} }, style: {} } }
 
 let captured: any = null
 const server = http.createServer((req, res) => {
@@ -22,6 +22,7 @@ const server = http.createServer((req, res) => {
     setTimeout(() => send({ choices: [{ delta: { content: '\n天气不错' } }] }), 55)
     setTimeout(() => {
       send({ choices: [{ delta: {}, finish_reason: 'stop' }] })
+      send({ choices: [], usage: { prompt_tokens: 120, completion_tokens: 24, total_tokens: 144 } })
       res.write('data: [DONE]\n\n')
       res.end()
     }, 85)
@@ -44,7 +45,7 @@ const profile = await settings.addProfile({
   name: '假模型',
   baseUrl: 'http://127.0.0.1:18080/v1',
   apiKey: 'test',
-  model: 'fake-model',
+  model: 'deepseek-chat',
   temperature: 0.8,
 })
 console.log('1) profile bound to text_main:', settings.bindings.text_main === profile.id)
@@ -62,5 +63,8 @@ console.log('5) system prompt has QQ 规则:', String(captured?.messages?.[0]?.c
 console.log('6) history roles:', (captured?.messages ?? []).slice(1).map((m: any) => m.role).join(','))
 console.log('7) stream flag:', captured?.stream, '| model:', captured?.model)
 console.log('8) conv preview:', contacts.conversationById(conv.id)?.lastText)
+const lastReply = replies[replies.length - 1]
+console.log('9) usage:', JSON.stringify(lastReply?.usage), '| cost:', lastReply?.cost, '| estimated:', lastReply?.usageEstimated)
+console.log('10) stream_options:', JSON.stringify(captured?.stream_options))
 
 server.close()

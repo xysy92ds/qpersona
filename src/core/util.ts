@@ -29,6 +29,7 @@ export function listTime(ts: number): string {
   if (diff === 0) return clockOf(ts)
   if (diff === 86400000) return '昨天'
   const d = new Date(ts)
+  if (diff < 7 * 86400000) return '星期' + '日一二三四五六'[d.getDay()]
   if (d.getFullYear() === new Date(now).getFullYear()) return `${d.getMonth() + 1}月${d.getDate()}日`
   return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())}`
 }

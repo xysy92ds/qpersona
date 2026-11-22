@@ -6,7 +6,7 @@ import BottomNav from '@/ui/shell/BottomNav.vue'
 import ToastHost from '@/ui/common/ToastHost.vue'
 
 const route = useRoute()
-const hideNav = computed(() => !['messages', 'contacts', 'me'].includes(String(route.name)))
+const hideNav = computed(() => !['messages', 'contacts', 'tavern'].includes(String(route.name)))
 </script>
 
 <template>

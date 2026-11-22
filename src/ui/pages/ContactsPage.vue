@@ -13,16 +13,15 @@ const list = computed(() => contacts.characters)
 
 <template>
   <div class="page">
-    <div class="head">
-      <div class="topbar head__bar">
-        <h1>联系人</h1>
-        <button class="iconbtn" aria-label="添加" @click="router.push('/add')"><AddOutline /></button>
-      </div>
-      <div class="searchbar">
-        <SearchOutline />
-        <span>搜索</span>
-      </div>
-    </div>
+    <header class="topbar">
+      <div class="topbar__title">联系人</div>
+      <button class="iconbtn" aria-label="添加" @click="router.push('/add')"><AddOutline /></button>
+    </header>
+
+    <button class="search" @click="router.push('/search')">
+      <SearchOutline />
+      <span>搜索好友、签名、标签</span>
+    </button>
 
     <div class="scroll">
       <div class="sheet-block">
@@ -66,69 +65,61 @@ const list = computed(() => contacts.characters)
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  background: var(--bg-page);
 }
-.head {
+.search {
   flex: none;
-  background: var(--brand-grad);
-  padding-bottom: 16px;
-}
-.head__bar {
-  background: transparent;
-  min-height: 44px;
-}
-.head__bar h1 {
-  font-size: 20px;
-}
-.searchbar {
-  margin: 6px 14px 0;
-  height: 34px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.22);
-  color: rgba(255, 255, 255, 0.92);
+  margin: 2px 16px 12px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--bg-sheet);
+  color: var(--text-3);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 13.5px;
 }
-.searchbar svg {
-  width: 15px;
-  height: 15px;
+.search svg {
+  width: 16px;
+  height: 16px;
 }
 .scroll {
-  margin-top: -8px;
-  border-radius: 14px 14px 0 0;
-  background: var(--bg);
   padding-bottom: 16px;
 }
 .sheet-block {
   background: var(--bg-sheet);
-  border-radius: 12px;
-  margin: 0 10px;
+  border-radius: 14px;
+  margin: 0 12px;
   overflow: hidden;
+  border: 1px solid var(--line);
 }
 .group-title {
-  padding: 18px 22px 7px;
+  padding: 20px 22px 8px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.cell {
+  background: transparent;
 }
 .cell-icon {
   width: 42px;
   height: 42px;
-  border-radius: 12px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
   color: #fff;
   flex: none;
 }
 .cell-icon svg {
-  width: 23px;
-  height: 23px;
+  width: 22px;
+  height: 22px;
 }
 .foot-note {
   text-align: center;
   font-size: 11px;
   color: var(--text-3);
-  padding: 22px 30px;
+  padding: 24px 30px;
   line-height: 1.6;
 }
 </style>

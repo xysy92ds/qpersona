@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   BookOutline,
   ChatbubblesOutline,
@@ -16,6 +16,7 @@ import { parseCardFile, buildCustomCard, type ParsedCard } from '@/core/card'
 import { useContactsStore } from '@/store/contacts'
 import { showToast } from '@/ui/common/toast'
 
+const route = useRoute()
 const router = useRouter()
 const contacts = useContactsStore()
 
@@ -89,6 +90,13 @@ async function createCharacter() {
   if (conv) router.replace(`/chat/${conv.id}`)
   else router.replace('/')
 }
+
+onMounted(() => {
+  const action = String(route.query.action || '')
+  if (action === 'create') createOpen.value = true
+  if (action === 'import') window.setTimeout(() => fileInput.value?.click(), 260)
+  if (action === 'distill') showToast('聊天记录培养 · 下一步就做')
+})
 
 function goBack() {
   if (window.history.length > 1) router.back()
@@ -226,7 +234,7 @@ function goBack() {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  background: var(--bg-page);
 }
 .scroll {
   padding-bottom: 24px;

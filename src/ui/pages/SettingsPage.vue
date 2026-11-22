@@ -1,20 +1,115 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
+  ChatbubblesOutline,
   ChevronBack,
   ChevronForward,
+  CloudDownloadOutline,
   ColorPaletteOutline,
-  InformationCircleOutline,
+  CreateOutline,
+  GridOutline,
   MoonOutline,
   NotificationsOutline,
-  ShieldCheckmarkOutline,
+  ServerOutline,
   SparklesOutline,
+  StatsChartOutline,
+  TimeOutline,
+  TrashOutline,
+  VolumeHighOutline,
 } from '@vicons/ionicons5'
-import { useSettingsStore } from '@/store/settings'
+import { useSettingsStore, type FontScale, type BubbleStyle, type ThemeMode } from '@/store/settings'
+import { useContactsStore } from '@/store/contacts'
+import { useChatStore } from '@/store/chat'
+import { db } from '@/core/db'
 import { showToast } from '@/ui/common/toast'
 
 const router = useRouter()
 const settings = useSettingsStore()
+const contacts = useContactsStore()
+const chat = useChatStore()
+
+const confirmClearChats = ref(false)
+const confirmWipe = ref(false)
+const storageText = ref('计算中…')
+
+const themes: { value: ThemeMode; label: string }[] = [
+  { value: 'light', label: '浅色' },
+  { value: 'dark', label: '深色' },
+  { value: 'auto', label: '跟随系统' },
+]
+const fonts: { value: FontScale; label: string }[] = [
+  { value: 'small', label: '小' },
+  { value: 'normal', label: '标准' },
+  { value: 'large', label: '大' },
+]
+const bubbles: { value: BubbleStyle; label: string; color: string }[] = [
+  { value: 'classic', label: '经典蓝', color: '#0099ff' },
+  { value: 'mint', label: '薄荷绿', color: '#23a67b' },
+  { value: 'sunset', label: '落日橙', color: '#ff8a3d' },
+]
+
+const counts = computed(
+  () => `${contacts.characters.length} 个角色 · ${contacts.conversations.length} 个会话`,
+)
+
+onMounted(async () => {
+  try {
+    const est = await navigator.storage?.estimate?.()
+    const used = est?.usage ?? 0
+    storageText.value = used ? `${(used / 1024 / 1024).toFixed(2)} MB` : '本地存储'
+  } catch {
+    storageText.value = '本地存储'
+  }
+})
+
+async function exportData() {
+  const [characters, conversations, messages] = await Promise.all([
+    db.characters.toArray(),
+    db.conversations.toArray(),
+    db.messages.toArray(),
+  ])
+  const payload = {
+    app: 'qpersona',
+    version: '0.3.0',
+    exportedAt: new Date().toISOString(),
+    characters,
+    conversations,
+    messages,
+    settings: { ...settings.snapshot(), profiles: settings.profiles.map((p) => ({ ...p, apiKey: '' })) },
+  }
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `qpersona-backup-${new Date().toISOString().slice(0, 10)}.json`
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 4000)
+  showToast('已导出对话与角色（不含 API Key）')
+}
+
+async function clearChats() {
+  if (!confirmClearChats.value) {
+    confirmClearChats.value = true
+    return
+  }
+  await db.messages.clear()
+  await db.conversations.toCollection().modify({ lastText: '聊天记录已清空', lastTs: Date.now(), unread: 0 })
+  chat.$reset()
+  await contacts.load()
+  confirmClearChats.value = false
+  showToast('聊天记录已清空，角色卡保留')
+}
+
+async function wipeAll() {
+  if (!confirmWipe.value) {
+    confirmWipe.value = true
+    return
+  }
+  await db.delete()
+  showToast('正在重置…')
+  setTimeout(() => location.reload(), 500)
+}
 
 function goBack() {
   if (window.history.length > 1) router.back()
@@ -27,35 +122,102 @@ function goBack() {
     <header class="topbar">
       <button class="iconbtn" aria-label="返回" @click="goBack"><ChevronBack /></button>
       <div class="topbar__title">设置</div>
-      <div style="width: 36px" />
+      <div style="width: 38px" />
     </header>
 
     <div class="scroll">
+      <div class="group-title">账号</div>
       <div class="sheet-block">
-        <button class="cell" @click="showToast('账号与安全 · 本地版无需登录')">
-          <div class="cell-icon" style="background: #34c759"><ShieldCheckmarkOutline /></div>
-          <div class="cell__body"><div class="cell__title">账号与安全</div></div>
-          <span class="cell__value">本地版</span>
-          <ChevronForward class="chev" />
-        </button>
-        <button class="cell" @click="showToast('消息气泡装扮 · 即将推出')">
-          <div class="cell-icon" style="background: #ff2d55"><ColorPaletteOutline /></div>
-          <div class="cell__body"><div class="cell__title">消息气泡</div><div class="cell__desc">气泡样式与头像装扮</div></div>
+        <button class="cell" @click="router.push('/profile')">
+          <div class="cell-icon" style="background: #3b82f6"><CreateOutline /></div>
+          <div class="cell__body">
+            <div class="cell__title">编辑资料</div>
+            <div class="cell__desc">{{ settings.user.nickname }} · QQ {{ settings.user.qqNumber }}</div>
+          </div>
           <ChevronForward class="chev" />
         </button>
       </div>
 
-      <div class="group-title">消息与通知</div>
+      <div class="group-title">外观</div>
+      <div class="sheet-block">
+        <div class="cell" style="cursor: default">
+          <div class="cell-icon" style="background: #5856d6"><MoonOutline /></div>
+          <div class="cell__body"><div class="cell__title">主题</div></div>
+        </div>
+        <div class="seg-wrap">
+          <div class="seg">
+            <button
+              v-for="t in themes"
+              :key="t.value"
+              class="seg__btn"
+              :class="{ on: settings.theme === t.value }"
+              @click="settings.setTheme(t.value)"
+            >{{ t.label }}</button>
+          </div>
+        </div>
+        <div class="cell" style="cursor: default">
+          <div class="cell-icon" style="background: #0ea5e9"><GridOutline /></div>
+          <div class="cell__body"><div class="cell__title">字体大小</div><div class="cell__desc">影响聊天气泡里的字</div></div>
+        </div>
+        <div class="seg-wrap">
+          <div class="seg">
+            <button
+              v-for="f in fonts"
+              :key="f.value"
+              class="seg__btn"
+              :class="{ on: settings.appearance.fontScale === f.value }"
+              @click="settings.setFontScale(f.value)"
+            >{{ f.label }}</button>
+          </div>
+        </div>
+        <div class="cell" style="cursor: default">
+          <div class="cell-icon" style="background: #ff2d55"><ColorPaletteOutline /></div>
+          <div class="cell__body"><div class="cell__title">我的气泡</div><div class="cell__desc">只改自己发出的消息</div></div>
+        </div>
+        <div class="bubbles">
+          <button
+            v-for="b in bubbles"
+            :key="b.value"
+            class="bubble-chip"
+            :class="{ on: settings.appearance.bubble === b.value }"
+            @click="settings.setBubble(b.value)"
+          >
+            <span class="bubble-chip__dot" :style="{ background: b.color }" />
+            {{ b.label }}
+          </button>
+        </div>
+      </div>
+
+      <div class="group-title">消息</div>
       <div class="sheet-block">
         <button class="cell" @click="settings.setFlag('notify', !settings.flags.notify)">
           <div class="cell-icon" style="background: #ff9f0a"><NotificationsOutline /></div>
           <div class="cell__body"><div class="cell__title">消息提醒</div></div>
           <span class="switch" :class="{ on: settings.flags.notify }" />
         </button>
-        <button class="cell" @click="settings.setTheme(settings.theme === 'dark' ? 'light' : 'dark')">
-          <div class="cell-icon" style="background: #5856d6"><MoonOutline /></div>
-          <div class="cell__body"><div class="cell__title">深色模式</div></div>
-          <span class="switch" :class="{ on: settings.theme === 'dark' }" />
+        <button class="cell" @click="settings.setFlag('sound', !settings.flags.sound)">
+          <div class="cell-icon" style="background: #22c55e"><VolumeHighOutline /></div>
+          <div class="cell__body">
+            <div class="cell__title">提示音</div>
+            <div class="cell__desc">收消息时轻轻响一下</div>
+          </div>
+          <span class="switch" :class="{ on: settings.flags.sound }" />
+        </button>
+        <button class="cell" @click="settings.setChatPref('autoSplit', !settings.chat.autoSplit)">
+          <div class="cell-icon" style="background: #0ea5e9"><ChatbubblesOutline /></div>
+          <div class="cell__body">
+            <div class="cell__title">自动拆气泡</div>
+            <div class="cell__desc">多行回复拆成几条短消息，更像真人</div>
+          </div>
+          <span class="switch" :class="{ on: settings.chat.autoSplit }" />
+        </button>
+        <button class="cell" @click="settings.setChatPref('showTime', !settings.chat.showTime)">
+          <div class="cell-icon" style="background: #8b5cf6"><TimeOutline /></div>
+          <div class="cell__body">
+            <div class="cell__title">显示时间</div>
+            <div class="cell__desc">聊天里插入时间分隔</div>
+          </div>
+          <span class="switch" :class="{ on: settings.chat.showTime }" />
         </button>
       </div>
 
@@ -65,45 +227,87 @@ function goBack() {
           <div class="cell-icon" style="background: linear-gradient(135deg,#5b8cff,#7b5bff)"><SparklesOutline /></div>
           <div class="cell__body">
             <div class="cell__title">AI 设置</div>
-            <div class="cell__desc">模型方案 · 能力槽位 · 功能开关</div>
+            <div class="cell__desc">模型方案 · 能力槽位 · 连接测试</div>
           </div>
           <ChevronForward class="chev" />
+        </button>
+        <button class="cell" @click="settings.setChatPref('showUsage', !settings.chat.showUsage)">
+          <div class="cell-icon" style="background: #14b8a6"><StatsChartOutline /></div>
+          <div class="cell__body">
+            <div class="cell__title">显示 token 消耗</div>
+            <div class="cell__desc">每条回复下面显示用量和估算费用</div>
+          </div>
+          <span class="switch" :class="{ on: settings.chat.showUsage }" />
         </button>
         <button class="cell" @click="settings.setFlag('memory', !settings.flags.memory)">
           <div class="cell__body">
             <div class="cell__title">记忆总结</div>
-            <div class="cell__desc">每 10 轮对话后台总结一次长期记忆</div>
+            <div class="cell__desc">每 10 轮后台总结一次长期记忆</div>
           </div>
           <span class="switch" :class="{ on: settings.flags.memory }" />
         </button>
         <button class="cell" @click="settings.setFlag('groupInterest', !settings.flags.groupInterest)">
           <div class="cell__body">
             <div class="cell__title">群聊兴趣调度</div>
-            <div class="cell__desc">按兴趣值决定谁被叫醒，屏蔽状态零模型调用</div>
+            <div class="cell__desc">按兴趣值决定谁被叫醒</div>
           </div>
           <span class="switch" :class="{ on: settings.flags.groupInterest }" />
         </button>
         <button class="cell" @click="settings.setFlag('tts', !settings.flags.tts)">
           <div class="cell__body">
             <div class="cell__title">语音播报</div>
-            <div class="cell__desc">把角色回复读出来（需要配置 TTS 槽位）</div>
+            <div class="cell__desc">用浏览器 TTS 把回复读出来</div>
           </div>
           <span class="switch" :class="{ on: settings.flags.tts }" />
         </button>
       </div>
 
-      <div class="group-title">关于</div>
+      <div class="group-title">数据</div>
       <div class="sheet-block">
-        <button class="cell" @click="showToast('Q伴 0.1.0 · 学习与演示用途')">
-          <div class="cell-icon" style="background: #8e8e93"><InformationCircleOutline /></div>
-          <div class="cell__body"><div class="cell__title">关于 Q伴</div></div>
-          <span class="cell__value">0.1.0</span>
+        <div class="cell" style="cursor: default">
+          <div class="cell-icon" style="background: #64748b"><ServerOutline /></div>
+          <div class="cell__body"><div class="cell__title">存储占用</div><div class="cell__desc">{{ counts }}</div></div>
+          <span class="cell__value">{{ storageText }}</span>
+        </div>
+        <button class="cell" @click="exportData">
+          <div class="cell-icon" style="background: #10b981"><CloudDownloadOutline /></div>
+          <div class="cell__body">
+            <div class="cell__title">导出数据</div>
+            <div class="cell__desc">角色、会话、消息打包成 JSON</div>
+          </div>
           <ChevronForward class="chev" />
+        </button>
+        <button class="cell" @click="clearChats">
+          <div class="cell-icon" style="background: #f59e0b"><TrashOutline /></div>
+          <div class="cell__body">
+            <div class="cell__title" :style="confirmClearChats ? 'color: var(--danger)' : ''">
+              {{ confirmClearChats ? '再点一次，确认清空' : '清空所有聊天记录' }}
+            </div>
+            <div class="cell__desc">保留角色卡，只删消息</div>
+          </div>
+        </button>
+        <button class="cell" @click="wipeAll">
+          <div class="cell__icon" />
+          <div class="cell__body">
+            <div class="cell__title" :style="confirmWipe ? 'color: var(--danger)' : ''">
+              {{ confirmWipe ? '再点一次，清空一切' : '清除全部数据' }}
+            </div>
+            <div class="cell__desc">角色、会话、设置、API Key 全部删除</div>
+          </div>
         </button>
       </div>
 
+      <div class="group-title">关于</div>
+      <div class="sheet-block">
+        <div class="cell" style="cursor: default">
+          <div class="cell__body"><div class="cell__title">Q伴 / QPersona</div><div class="cell__desc">开源非商业 · 学习与演示用途</div></div>
+          <span class="cell__value">0.3.0</span>
+        </div>
+      </div>
+
       <div class="foot">
-        本项目为开源非商业作品，界面风格参考 QQ，<br />所有「好友」均为本地 AI 角色，不连接真实 QQ 服务。
+        本项目界面风格参考 QQ，相关素材版权归腾讯所有；<br />
+        所有「好友」均为本地 AI 角色，不连接真实 QQ 服务。
       </div>
     </div>
   </div>
@@ -115,16 +319,17 @@ function goBack() {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  background: var(--bg-page);
 }
 .scroll {
   padding-bottom: 24px;
 }
 .sheet-block {
   background: var(--bg-sheet);
-  border-radius: 12px;
-  margin: 0 10px;
+  border-radius: 14px;
+  margin: 0 12px;
   overflow: hidden;
+  border: 1px solid var(--line);
 }
 .cell-icon {
   width: 30px;
@@ -136,11 +341,68 @@ function goBack() {
   flex: none;
 }
 .cell-icon svg {
-  width: 19px;
-  height: 19px;
+  width: 18px;
+  height: 18px;
+}
+.cell__icon {
+  width: 30px;
+  flex: none;
 }
 .group-title {
-  padding: 18px 22px 7px;
+  padding: 18px 20px 8px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.seg-wrap {
+  padding: 0 14px 12px;
+}
+.seg {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-hover);
+  border-radius: 10px;
+  padding: 3px;
+}
+.seg__btn {
+  flex: 1;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-2);
+  transition: all 0.15s;
+}
+.seg__btn.on {
+  background: var(--bg-sheet);
+  color: var(--text);
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.1);
+}
+.bubbles {
+  display: flex;
+  gap: 8px;
+  padding: 0 14px 14px;
+}
+.bubble-chip {
+  flex: 1;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  font-size: 12.5px;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.bubble-chip.on {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: rgba(0, 153, 255, 0.06);
+}
+.bubble-chip__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
 }
 .foot {
   text-align: center;

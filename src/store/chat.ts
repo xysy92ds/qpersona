@@ -2,10 +2,11 @@ import { defineStore } from 'pinia'
 import { reactive } from 'vue'
 import { db, putMessage } from '@/core/db'
 import type { Message } from '@/core/types'
-import type { ChatMsg } from '@/core/llm'
+import type { ChatMsg, Usage } from '@/core/llm'
 import { buildChatMessages } from '@/core/prompt'
 import { streamChat } from '@/core/llm'
 import { uid, sleep } from '@/core/util'
+import { costOf, estimateTokens, resolvePrice } from '@/core/pricing'
 import { useContactsStore } from './contacts'
 import { useSettingsStore } from './settings'
 
@@ -148,8 +149,16 @@ export const useChatStore = defineStore('chat', {
       const ac = new AbortController()
       controllers.set(convId, ac)
       this.streaming[convId] = true
+      let apiUsage: Usage | null = null
       try {
-        for await (const delta of streamChat({ profile, messages, signal: ac.signal })) {
+        for await (const delta of streamChat({
+          profile,
+          messages,
+          signal: ac.signal,
+          onUsage: (u) => {
+            apiUsage = u
+          },
+        })) {
           reply.text += delta
         }
         reply.status = 'ok'
@@ -168,15 +177,31 @@ export const useChatStore = defineStore('chat', {
         controllers.delete(convId)
       }
 
-      // QQ 端：把多行回复拆成连续几条气泡
+      // 这一轮的 token 用量：优先用接口回传的，没有就按字数估
+      const promptEst = messages.reduce((n, m) => n + estimateTokens(m.content), 0)
+      const completionEst = estimateTokens(reply.text)
+      const u = apiUsage as Usage | null
+      const usage = u
+        ? {
+            prompt: u.prompt_tokens ?? promptEst,
+            completion: u.completion_tokens ?? completionEst,
+            total: u.total_tokens ?? (u.prompt_tokens ?? promptEst) + (u.completion_tokens ?? completionEst),
+          }
+        : { prompt: promptEst, completion: completionEst, total: promptEst + completionEst }
+      reply.usage = usage
+      reply.usageEstimated = !u
+      reply.cost = costOf(usage, resolvePrice(profile))
+
+      // QQ 端：把多行回复拆成连续几条气泡（设置里可关）
       let preview = reply.text
-      if (reply.status === 'ok' && conv.profile === 'qq') {
+      if (reply.status === 'ok' && conv.profile === 'qq' && settings.chat.autoSplit) {
         const parts = splitBubbles(reply.text)
         if (parts.length > 1) {
           reply.text = parts[0]!
           for (let i = 1; i < parts.length; i++) {
             await sleep(220)
-            const extra: Message = {
+            const isLast = i === parts.length - 1
+            const extra = reactive<Message>({
               id: uid('m'),
               conversationId: convId,
               role: 'assistant',
@@ -185,10 +210,15 @@ export const useChatStore = defineStore('chat', {
               ts: nextTs(list),
               status: 'ok',
               kind: 'text',
-            }
+              // 用量是整轮回复的，挂在最后一条气泡下面更自然
+              ...(isLast ? { usage: reply.usage, cost: reply.cost, usageEstimated: reply.usageEstimated } : {}),
+            })
             await this.pushLocal(convId, extra)
             preview = parts[i]!
           }
+          reply.usage = undefined
+          reply.cost = undefined
+          reply.usageEstimated = undefined
         }
       }
 
@@ -222,6 +252,36 @@ export const useChatStore = defineStore('chat', {
     async clear(convId: string) {
       await db.messages.where('conversationId').equals(convId).delete()
       this.byConv[convId] = []
+      await useContactsStore().touch(convId, { lastText: '开始聊天吧', lastTs: Date.now() })
+    },
+
+    async deleteMessage(convId: string, id: string) {
+      const list = this.byConv[convId]
+      if (!list) return
+      const i = list.findIndex((m) => m.id === id)
+      if (i < 0) return
+      list.splice(i, 1)
+      await db.messages.delete(id)
+      const last = list[list.length - 1]
+      await useContactsStore().touch(convId, {
+        lastText: last?.text.slice(0, 80) || '开始聊天吧',
+        lastTs: last?.ts || Date.now(),
+      })
+    },
+
+    /** 系统灰条：拍一拍、进群提示之类 */
+    async addTip(convId: string, text: string) {
+      await this.load(convId)
+      const list = (this.byConv[convId] ??= [])
+      await this.pushLocal(convId, {
+        id: uid('m'),
+        conversationId: convId,
+        role: 'system',
+        text,
+        ts: nextTs(list),
+        status: 'ok',
+        kind: 'tip',
+      })
     },
   },
 })

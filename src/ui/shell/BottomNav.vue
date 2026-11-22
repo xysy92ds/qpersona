@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Chatbubbles, ChatbubblesOutline, People, PeopleOutline, PersonCircle, PersonCircleOutline } from '@vicons/ionicons5'
+import { Chatbubbles, ChatbubblesOutline, People, PeopleOutline, Sparkles, SparklesOutline } from '@vicons/ionicons5'
 import { useContactsStore } from '@/store/contacts'
 
 const route = useRoute()
@@ -10,7 +10,7 @@ const contacts = useContactsStore()
 const tabs = computed(() => [
   { name: 'messages', to: '/', label: '消息', icon: ChatbubblesOutline, activeIcon: Chatbubbles },
   { name: 'contacts', to: '/contacts', label: '联系人', icon: PeopleOutline, activeIcon: People },
-  { name: 'me', to: '/me', label: '我的', icon: PersonCircleOutline, activeIcon: PersonCircle },
+  { name: 'tavern', to: '/tavern', label: '酒馆', icon: SparklesOutline, activeIcon: Sparkles },
 ])
 
 const unread = computed(() => contacts.totalUnread)
@@ -31,3 +31,12 @@ const unread = computed(() => contacts.totalUnread)
     </RouterLink>
   </nav>
 </template>
+
+<style scoped>
+.tabbar__item.active {
+  color: #0099ff;
+}
+.tabbar__item span {
+  letter-spacing: 0.3px;
+}
+</style>

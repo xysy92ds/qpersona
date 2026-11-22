@@ -36,3 +36,13 @@ export function makeDemoCharacter(): Character {
   ext.qq.aliases = ['知夏', '夏夏', '小夏']
   return makeCharacter(demoCard, ext)
 }
+
+/** 演示会话的第二段：让新装的应用一进来就不是空聊天 */
+export const DEMO_THREAD: { role: 'user' | 'assistant'; text: string }[] = [
+  { role: 'user', text: '刚下班，路过书店，灯还亮着' },
+  { role: 'assistant', text: '那你上来坐坐？台阶是凉的，我给你拿个垫子。' },
+  { role: 'user', text: '不了，明天还得早起' },
+  { role: 'assistant', text: '哦——' },
+  { role: 'assistant', text: '那早点回去，路上别刷手机。' },
+  { role: 'assistant', text: '年糕刚才还趴在窗台上看你呢。' },
+]
