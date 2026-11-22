@@ -118,6 +118,11 @@ export function historyText(m: Message): string {
     return `[表情包：${name}${note}]`
   }
   if (m.kind === 'file') return `[文件：${m.file?.name ?? '未命名文件'}]`
+  if (m.kind === 'card') {
+    const c = m.card
+    if (!c) return '[卡片]'
+    return `[卡片：${c.title}]${c.description ? ' ' + c.description : ''}（${c.url}）`
+  }
   if (m.quote) return `[引用 ${m.quote.name}：「${m.quote.text}」]\n${m.text}`
   return m.text
 }
@@ -142,7 +147,7 @@ export function buildChatMessages(args: BuildArgs): ChatMsg[] {
       (m) =>
         m.kind !== 'tip' &&
         m.role !== 'system' &&
-        (m.text.trim() || m.kind === 'sticker' || m.kind === 'file'),
+        (m.text.trim() || m.kind === 'sticker' || m.kind === 'file' || m.kind === 'card'),
     )
     .slice(-HISTORY_LIMIT[profile])
     .map<ChatMsg>((m) => ({

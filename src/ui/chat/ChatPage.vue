@@ -12,7 +12,7 @@ import { avatarSvg, characterAvatar } from '@/core/avatar'
 import { chatTime } from '@/core/util'
 import { showToast } from '@/ui/common/toast'
 import { ping } from '@/core/audio'
-import type { FilePayload, Message, QuotePayload, Sticker } from '@/core/types'
+import type { CardPayload, FilePayload, Message, QuotePayload, Sticker } from '@/core/types'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
@@ -130,6 +130,11 @@ async function sendSticker(sticker: Sticker) {
 async function sendFile(file: FilePayload) {
   stick.value = true
   await chat.sendFile(props.id, file)
+}
+
+async function sendCard(card: CardPayload) {
+  stick.value = true
+  await chat.sendCard(props.id, card)
 }
 
 function quoteMessage() {
@@ -293,6 +298,7 @@ async function poke() {
       @poke="poke"
       @sticker="sendSticker"
       @file="sendFile"
+      @card="sendCard"
       @close-quote="quoting = null"
     />
 

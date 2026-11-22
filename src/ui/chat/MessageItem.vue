@@ -23,6 +23,15 @@ const isTip = computed(() => props.message.kind === 'tip')
 const usageText = computed(() => usageLabel(props.message))
 const isSticker = computed(() => props.message.kind === 'sticker')
 const isFile = computed(() => props.message.kind === 'file')
+const isCard = computed(() => props.message.kind === 'card')
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host
+  } catch {
+    return url.replace(/^https?:\/\//, '').slice(0, 32)
+  }
+}
 
 function formatSize(n: number): string {
   if (!n) return '0 B'
@@ -65,6 +74,7 @@ function move(e: PointerEvent) {
       'msg--error': message.status === 'error',
       'msg--hide-name': !showName,
       'msg--sticker': isSticker,
+      'msg--card': isCard,
     }"
     @pointerdown="down"
     @pointerup="cancel"
@@ -84,7 +94,22 @@ function move(e: PointerEvent) {
         </div>
 
         <a
-          v-if="isFile && message.file"
+          v-if="isCard && message.card"
+          class="link-card"
+          :href="message.card.url"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <span class="link-card__body">
+            <span class="link-card__title">{{ message.card.title }}</span>
+            <span v-if="message.card.description" class="link-card__desc">{{ message.card.description }}</span>
+            <span class="link-card__url">{{ hostOf(message.card.url) }}</span>
+          </span>
+          <span class="link-card__thumb">🔗</span>
+        </a>
+
+        <a
+          v-else-if="isFile && message.file"
           class="file-card"
           :href="message.file.url"
           :download="message.file.name"
@@ -191,6 +216,68 @@ function move(e: PointerEvent) {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 200px;
+}
+.msg--card :deep(.mix-message__container) {
+  padding: 6px !important;
+}
+.msg :deep(.link-card) {
+  text-decoration: none !important;
+  color: #14171c !important;
+}
+.link-card {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  width: 228px;
+  max-width: 64vw;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #14171c;
+}
+.link-card__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.link-card__title {
+  color: #14171c;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.link-card__desc {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.link-card__url {
+  font-size: 10px;
+  color: #9aa1ad;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.link-card__thumb {
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #dbeafe, #e0e7ff);
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  flex: none;
+  align-self: center;
 }
 .msg :deep(.file-card) {
   text-decoration: none !important;

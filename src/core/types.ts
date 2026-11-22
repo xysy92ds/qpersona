@@ -143,7 +143,7 @@ export interface Conversation {
 
 export type MsgRole = 'user' | 'assistant' | 'system'
 export type MsgStatus = 'ok' | 'streaming' | 'error'
-export type MsgKind = 'text' | 'tip' | 'sticker' | 'file'
+export type MsgKind = 'text' | 'tip' | 'sticker' | 'file' | 'card'
 
 export interface StickerPayload {
   id: string
@@ -157,6 +157,12 @@ export interface FilePayload {
   name: string
   size: number
   mime: string
+  url: string
+}
+
+export interface CardPayload {
+  title: string
+  description: string
   url: string
 }
 
@@ -182,6 +188,8 @@ export interface Message {
   sticker?: StickerPayload
   /** 文件消息 */
   file?: FilePayload
+  /** 链接卡片消息 */
+  card?: CardPayload
   /** 引用某条消息 */
   quote?: QuotePayload
   error?: string

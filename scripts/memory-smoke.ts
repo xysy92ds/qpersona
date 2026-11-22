@@ -94,10 +94,17 @@ const quoteMsg: any = {
   text: '那明天见',
   quote: { id: 'm2', role: 'assistant', name: '林知夏', text: '台阶是凉的' },
 }
+const cardMsg: any = {
+  ...stickerMsg,
+  id: 'm_card',
+  kind: 'card',
+  sticker: undefined,
+  card: { title: '周末的展', description: '三点在美术馆门口见', url: 'https://example.com/expo' },
+}
 const built = buildChatMessages({
   character: ch,
   profile: 'qq',
-  history: [stickerMsg, fileMsg, quoteMsg],
+  history: [stickerMsg, fileMsg, quoteMsg, cardMsg],
   userName: '我',
   memoryText: recalled,
 })
@@ -106,5 +113,6 @@ console.log('5) sticker->prompt:', JSON.stringify(contents[0]))
 console.log('6) file->prompt:', JSON.stringify(contents[1]))
 console.log('7) quote->prompt:', JSON.stringify(contents[2]))
 console.log('8) memory injected:', built[0]!.content.includes('对方喜欢雨天'))
+console.log('9) card->prompt:', JSON.stringify(contents[3]))
 
 server.close()

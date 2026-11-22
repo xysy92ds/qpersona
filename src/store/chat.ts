@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { reactive } from 'vue'
 import { db, putMessage } from '@/core/db'
-import type { FilePayload, Message, QuotePayload, Sticker } from '@/core/types'
+import type { CardPayload, FilePayload, Message, QuotePayload, Sticker } from '@/core/types'
 import type { ChatMsg, Usage } from '@/core/llm'
 import { buildChatMessages } from '@/core/prompt'
 import { streamChat } from '@/core/llm'
@@ -17,6 +17,7 @@ const controllers = new Map<string, AbortController>()
 function messageText(m: Message): string {
   if (m.kind === 'sticker') return `[表情包：${m.sticker?.name ?? ''}]`
   if (m.kind === 'file') return `[文件：${m.file?.name ?? ''}]`
+  if (m.kind === 'card') return `[卡片：${m.card?.title ?? ''}]`
   return m.text
 }
 
@@ -155,6 +156,31 @@ export const useChatStore = defineStore('chat', {
       }
       await this.pushLocal(convId, msg)
       await contacts.touch(convId, { lastText: `[文件] ${file.name}`, lastTs: msg.ts, unread: 0 })
+      if (this.streaming[convId]) {
+        this.pendingReply[convId] = true
+        return
+      }
+      await this.respond(convId)
+    },
+
+    async sendCard(convId: string, card: CardPayload) {
+      const contacts = useContactsStore()
+      const conv = contacts.conversationById(convId)
+      if (!conv) return
+      await this.load(convId)
+      const list = (this.byConv[convId] ??= [])
+      const msg: Message = {
+        id: uid('m'),
+        conversationId: convId,
+        role: 'user',
+        text: '',
+        ts: nextTs(list),
+        status: 'ok',
+        kind: 'card',
+        card,
+      }
+      await this.pushLocal(convId, msg)
+      await contacts.touch(convId, { lastText: `[卡片] ${card.title}`, lastTs: msg.ts, unread: 0 })
       if (this.streaming[convId]) {
         this.pendingReply[convId] = true
         return

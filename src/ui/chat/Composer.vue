@@ -12,7 +12,7 @@ import {
 import BottomSheet from '@/ui/common/BottomSheet.vue'
 import { showToast } from '@/ui/common/toast'
 import { useStickersStore } from '@/store/stickers'
-import type { FilePayload, QuotePayload, Sticker } from '@/core/types'
+import type { CardPayload, FilePayload, QuotePayload, Sticker } from '@/core/types'
 
 const props = defineProps<{ disabled?: boolean; streaming?: boolean; quote?: QuotePayload | null }>()
 const emit = defineEmits<{
@@ -21,6 +21,7 @@ const emit = defineEmits<{
   poke: []
   sticker: [Sticker]
   file: [FilePayload]
+  card: [CardPayload]
   closeQuote: []
 }>()
 
@@ -31,7 +32,9 @@ const text = ref('')
 const area = ref<HTMLTextAreaElement>()
 const panel = ref<'emoji' | 'sticker' | null>(null)
 const moreOpen = ref(false)
+const cardOpen = ref(false)
 const listening = ref(false)
+const card = ref({ title: '', url: '', description: '' })
 const fileInput = ref<HTMLInputElement>()
 
 let rec: any = null
@@ -87,6 +90,24 @@ function pickEmoji(e: string) {
 function pickSticker(s: Sticker) {
   emit('sticker', s)
   panel.value = null
+}
+
+function openCardForm() {
+  moreOpen.value = false
+  card.value = { title: '', url: '', description: '' }
+  cardOpen.value = true
+}
+
+function submitCard() {
+  const title = card.value.title.trim()
+  const raw = card.value.url.trim()
+  if (!title || !raw) {
+    showToast('标题和链接都要填')
+    return
+  }
+  const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+  emit('card', { title, description: card.value.description.trim(), url })
+  cardOpen.value = false
 }
 
 function manageStickers() {
@@ -232,8 +253,12 @@ watch(text, () => nextTick(resize))
           <span class="more-item__icon" style="background: #8b5cf6">📎</span>
           <span>文件</span>
         </button>
-        <button class="more-item" @click="moreOpen = false; showToast('图片消息 · 下一步就做')">
-          <span class="more-item__icon" style="background: #0ea5e9">🖼️</span>
+        <button class="more-item" @click="openCardForm">
+          <span class="more-item__icon" style="background: #0ea5e9">📇</span>
+          <span>卡片</span>
+        </button>
+        <button class="more-item" @click="moreOpen = false; showToast('图片消息 · 下次做')">
+          <span class="more-item__icon" style="background: #e11d48">🖼️</span>
           <span>图片</span>
           <em>即将推出</em>
         </button>
@@ -246,6 +271,25 @@ watch(text, () => nextTick(resize))
     </BottomSheet>
 
     <input ref="fileInput" type="file" hidden @change="onFile" />
+
+    <BottomSheet v-model="cardOpen" title="发送链接卡片">
+      <label class="field">
+        <span class="field__label">标题</span>
+        <input v-model="card.title" class="input" maxlength="40" placeholder="例如：周末的展" />
+      </label>
+      <label class="field">
+        <span class="field__label">链接</span>
+        <input v-model="card.url" class="input" inputmode="url" placeholder="https://" />
+      </label>
+      <label class="field">
+        <span class="field__label">描述（可选）</span>
+        <textarea v-model="card.description" class="textarea" maxlength="120" placeholder="一句话说说这是什么" />
+      </label>
+      <template #footer>
+        <button class="btn btn--ghost" @click="cardOpen = false">取消</button>
+        <button class="btn" @click="submitCard">发送</button>
+      </template>
+    </BottomSheet>
   </div>
 </template>
 
