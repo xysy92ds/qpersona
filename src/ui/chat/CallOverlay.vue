@@ -43,6 +43,8 @@ let recognition: any = null
 let resolveRecognition: ((text: string) => void) | null = null
 let audioEl: HTMLAudioElement | null = null
 let audioUrl: string | null = null
+let watchdog: number | null = null
+const closed = ref(false)
 
 onMounted(() => {
   timer = window.setInterval(() => (seconds.value += 1), 1000)
@@ -164,22 +166,38 @@ async function endTurn() {
   }
 
   if (!text.trim()) {
+    error.value = '没听清，再说一次'
     status.value = 'idle'
     return
   }
   lastHeard.value = text
+  error.value = ''
   try {
+    // 模型有时会一直不回应：给这一轮一个上限，超时就中止，不把通话卡死
+    watchdog = window.setTimeout(() => {
+      chat.stop(props.conversationId)
+      error.value = '这一轮等太久了，先停下了；可以再说一次'
+      status.value = 'idle'
+    }, 45_000)
     await chat.send(props.conversationId, text, undefined, { call: true })
+    if (closed.value) return
     const msgs = chat.messagesOf(props.conversationId)
     const reply = [...msgs].reverse().find((m) => m.role === 'assistant' && m.text.trim())
     if (reply) {
       lastSaid.value = reply.text
       await speak(reply.text)
+    } else {
+      error.value = '没收到回复，检查一下模型配置'
     }
   } catch {
-    error.value = '回复失败了，检查一下模型配置'
+    if (!closed.value) error.value = '回复失败了，检查一下模型配置'
+  } finally {
+    if (watchdog) {
+      window.clearTimeout(watchdog)
+      watchdog = null
+    }
   }
-  status.value = 'idle'
+  if (!closed.value) status.value = 'idle'
 }
 
 function playUrl(url: string): Promise<void> {
@@ -238,8 +256,15 @@ function toggleMute() {
 }
 
 function hangup() {
+  closed.value = true
   if (timer) window.clearInterval(timer)
   timer = null
+  if (watchdog) {
+    window.clearTimeout(watchdog)
+    watchdog = null
+  }
+  // 正在等模型时也要能挂断：先中止这一轮请求
+  chat.stop(props.conversationId)
   audioEl?.pause()
   speechSynthesis?.cancel()
   try {
@@ -249,12 +274,18 @@ function hangup() {
   }
   recognition?.abort?.()
   cleanupMic()
+  status.value = 'idle'
   void chat.addTip(props.conversationId, `通话结束 · ${clock.value}`)
   emit('close')
 }
 
 onUnmounted(() => {
+  closed.value = true
   if (timer) window.clearInterval(timer)
+  if (watchdog) {
+    window.clearTimeout(watchdog)
+    watchdog = null
+  }
   audioEl?.pause()
   speechSynthesis?.cancel()
   cleanupMic()

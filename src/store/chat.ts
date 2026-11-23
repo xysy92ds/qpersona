@@ -296,7 +296,7 @@ export const useChatStore = defineStore('chat', {
       const list = this.byConv[convId] ?? []
       const members = (conv.memberIds ?? [])
         .map((id) => contacts.characterById(id))
-        .filter((c): c is Character => !!c && c.ext.toggles.chat)
+        .filter((c): c is Character => !!c && c.ext.toggles.chat && !conv.groupMuted?.[c.id])
       if (!members.length) return
 
       const now = Date.now()
@@ -402,7 +402,21 @@ export const useChatStore = defineStore('chat', {
         return
       }
 
-      const history = list.slice()
+      const isolate = conv.groupIsolation !== false
+      const seen = conv.groupSeen?.[ch.id] ?? 0
+      let history = list.slice()
+      if (isolate) {
+        const recent = list.slice(-10)
+        const fresh = list.filter((m) => m.ts > seen)
+        const seenIds = new Set<number>()
+        history = [...fresh, ...recent]
+          .filter((m) => {
+            if (seenIds.has(m.ts)) return false
+            seenIds.add(m.ts)
+            return true
+          })
+          .sort((a, b) => a.ts - b.ts)
+      }
       const query = history
         .filter((m) => m.role === 'user')
         .slice(-3)
@@ -528,9 +542,11 @@ export const useChatStore = defineStore('chat', {
       }
 
       await putMessage(reply)
+      const latest = contacts.conversationById(convId)
       await contacts.touch(convId, {
         lastText: `${displayName}：${preview.slice(0, 60)}`,
         lastTs: Date.now(),
+        groupSeen: { ...(latest?.groupSeen ?? {}), [ch.id]: Date.now() },
       })
     },
 

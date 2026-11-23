@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { CameraOutline, ChevronBack, CloseCircleOutline, PersonAddOutline } from '@vicons/ionicons5'
+import {
+  CameraOutline,
+  ChevronBack,
+  CloseCircleOutline,
+  NotificationsOffOutline,
+  NotificationsOutline,
+  PersonAddOutline,
+} from '@vicons/ionicons5'
 import Avatar from '@/ui/common/Avatar.vue'
 import BottomSheet from '@/ui/common/BottomSheet.vue'
 import { useContactsStore } from '@/store/contacts'
@@ -24,6 +31,8 @@ const avatar = ref(conv.value?.avatar ?? '')
 const activeMinutes = ref(conv.value?.groupActiveMinutes ?? 5)
 const memberIds = ref<string[]>([...(conv.value?.memberIds ?? [])])
 const memoryShare = ref(conv.value?.groupMemoryShare !== false)
+const isolation = ref(conv.value?.groupIsolation !== false)
+const muted = ref<Record<string, boolean>>({ ...(conv.value?.groupMuted ?? {}) })
 const avatarInput = ref<HTMLInputElement>()
 const addOpen = ref(false)
 
@@ -43,6 +52,10 @@ async function pickAvatar(e: Event) {
   } catch {
     showToast('这张图读不出来，换一张试试')
   }
+}
+
+function toggleMute(id: string) {
+  muted.value = { ...muted.value, [id]: !muted.value[id] }
 }
 
 function removeMember(id: string) {
@@ -77,6 +90,8 @@ async function save() {
     avatar: avatar.value,
     groupActiveMinutes: activeMinutes.value,
     groupMemoryShare: memoryShare.value,
+    groupIsolation: isolation.value,
+    groupMuted: muted.value,
     memberIds: memberIds.value,
   })
   showToast('群资料已更新')
@@ -133,6 +148,19 @@ function goBack() {
         </div>
       </div>
 
+      <div class="group-title">群聊行为</div>
+      <div class="sheet-block">
+        <button class="cell" @click="isolation = !isolation">
+          <div class="cell__body">
+            <div class="cell__title">严格上下文隔离</div>
+            <div class="cell__desc">
+              打开后，每个成员主要看自己上次发言之后的群消息 + 最近 10 条，省 token 也更像真人。
+            </div>
+          </div>
+          <span class="switch" :class="{ on: isolation }" />
+        </button>
+      </div>
+
       <div class="group-title">记忆</div>
       <div class="sheet-block">
         <button class="cell" @click="memoryShare = !memoryShare">
@@ -154,6 +182,10 @@ function goBack() {
             <div class="member__name">{{ m.ext.qq.nickname || m.card.name }}</div>
             <div class="member__desc">{{ m.ext.qq.signature || m.card.tags?.join(' · ') || '群成员' }}</div>
           </div>
+          <button class="member__mute" :aria-label="muted[m.id] ? '取消免打扰' : '免打扰'" @click="toggleMute(m.id)">
+            <NotificationsOffOutline v-if="muted[m.id]" />
+            <NotificationsOutline v-else />
+          </button>
           <button class="member__del" aria-label="移出群聊" @click="removeMember(m.id)">
             <CloseCircleOutline />
           </button>
@@ -319,6 +351,17 @@ function goBack() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.member__mute {
+  width: 26px;
+  height: 26px;
+  color: var(--text-3);
+  display: grid;
+  place-items: center;
+}
+.member__mute svg {
+  width: 18px;
+  height: 18px;
 }
 .member__del {
   width: 26px;

@@ -22,7 +22,6 @@ import {
 } from '@vicons/ionicons5'
 import {
   useSettingsStore,
-  type AccentColor,
   type BubbleStyle,
   type FontScale,
   type ThemeMode,
@@ -44,6 +43,7 @@ const confirmImport = ref(false)
 const importInput = ref<HTMLInputElement>()
 const storageText = ref('计算中…')
 const chatBgInput = ref<HTMLInputElement>()
+const themeInput = ref<HTMLInputElement>()
 
 const themes: { value: ThemeMode; label: string }[] = [
   { value: 'light', label: '浅色' },
@@ -61,14 +61,10 @@ const bubbles: { value: BubbleStyle; label: string; color: string }[] = [
   { value: 'sunset', label: '落日橙', color: '#ff8a3d' },
   { value: 'sakura', label: '樱花粉', color: '#ff6f9c' },
   { value: 'ink', label: '墨色', color: '#2f3542' },
+  { value: 'lavender', label: '雾紫', color: '#8b7cf6' },
+  { value: 'cocoa', label: '可可', color: '#a97455' },
 ]
 
-const accents: { value: AccentColor; label: string; color: string }[] = [
-  { value: 'blue', label: '默认蓝', color: '#0099ff' },
-  { value: 'pink', label: '樱花粉', color: '#ff5c8a' },
-  { value: 'green', label: '松石绿', color: '#10b981' },
-  { value: 'purple', label: '暮光紫', color: '#8b5cf6' },
-]
 
 const counts = computed(
   () => `${contacts.characters.length} 个角色 · ${contacts.conversations.length} 个会话`,
@@ -83,6 +79,46 @@ onMounted(async () => {
     storageText.value = '本地存储'
   }
 })
+
+async function exportTheme() {
+  const payload = {
+    app: 'qpersona-theme',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    theme: settings.theme,
+    appearance: settings.appearance,
+  }
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `qpersona-theme-${new Date().toISOString().slice(0, 10)}.json`
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 3000)
+  showToast('主题包已导出')
+}
+
+async function importTheme(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  try {
+    const data = JSON.parse(await file.text())
+    if (data?.app !== 'qpersona-theme' || !data?.appearance) {
+      throw new Error('不是 Q伴 的主题包')
+    }
+    const a = data.appearance
+    if (data.theme === 'light' || data.theme === 'dark' || data.theme === 'auto') await settings.setTheme(data.theme)
+    if (a.fontScale === 'small' || a.fontScale === 'normal' || a.fontScale === 'large') await settings.setFontScale(a.fontScale)
+    if (typeof a.bubble === 'string') await settings.setBubble(a.bubble)
+    if (a.textStyle === 'default' || a.textStyle === 'serif') await settings.setTextStyle(a.textStyle)
+    if (typeof a.chatBackground === 'string') await settings.setChatBackground(a.chatBackground)
+    showToast('主题包已应用')
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : '主题包读取失败', 3000)
+  }
+}
 
 async function pickChatBg(e: Event) {
   const input = e.target as HTMLInputElement
@@ -252,6 +288,17 @@ function goBack() {
           </div>
         </div>
         <div class="cell" style="cursor: default">
+          <div class="cell-icon" style="background: #64748b"><GridOutline /></div>
+          <div class="cell__body"><div class="cell__title">文字风格</div><div class="cell__desc">聊天气泡里的字体</div></div>
+        </div>
+        <div class="seg-wrap">
+          <div class="seg">
+            <button class="seg__btn" :class="{ on: settings.appearance.textStyle === 'default' }" @click="settings.setTextStyle('default')">默认</button>
+            <button class="seg__btn" :class="{ on: settings.appearance.textStyle === 'serif' }" @click="settings.setTextStyle('serif')">宋体</button>
+          </div>
+        </div>
+
+        <div class="cell" style="cursor: default">
           <div class="cell-icon" style="background: #ff2d55"><ColorPaletteOutline /></div>
           <div class="cell__body"><div class="cell__title">我的气泡</div><div class="cell__desc">只改自己发出的消息</div></div>
         </div>
@@ -267,21 +314,6 @@ function goBack() {
             {{ b.label }}
           </button>
         </div>
-        <div class="cell" style="cursor: default">
-          <div class="cell-icon" style="background: #64748b"><ColorPaletteOutline /></div>
-          <div class="cell__body"><div class="cell__title">主题色</div><div class="cell__desc">导航、按钮和头像的强调色</div></div>
-        </div>
-        <div class="accents">
-          <button
-            v-for="a in accents"
-            :key="a.value"
-            class="accent"
-            :style="{ background: a.color }"
-            :class="{ on: settings.appearance.accent === a.value }"
-            :aria-label="a.label"
-            @click="settings.setAccent(a.value)"
-          />
-        </div>
         <div class="cell">
           <div class="cell-icon" style="background: #0ea5e9"><ImageOutline /></div>
           <div class="cell__body">
@@ -291,6 +323,11 @@ function goBack() {
           <button class="mini-btn" @click="chatBgInput?.click()">上传</button>
           <button v-if="settings.appearance.chatBackground" class="mini-btn mini-btn--dim" @click="settings.setChatBackground('')">恢复</button>
         </div>
+        <div class="theme-pack">
+          <button class="mini-btn" @click="exportTheme">导出主题</button>
+          <button class="mini-btn" @click="themeInput?.click()">导入主题</button>
+        </div>
+        <div class="hint" style="padding-top: 0">Q伴 主题包（JSON），不是 QQ 主题包。</div>
       </div>
 
       <div class="group-title">消息</div>
@@ -419,6 +456,30 @@ function goBack() {
               <button v-for="n in [15, 30, 60, 120]" :key="n" class="seg__btn" :class="{ on: settings.proactive.minutes === n }" @click="settings.setProactive({ minutes: n })">{{ n }} 分</button>
             </div>
           </div>
+          <button class="cell" @click="settings.setProactive({ quietEnabled: !settings.proactive.quietEnabled })">
+            <div class="cell__body">
+              <div class="cell__title">免打扰时段</div>
+              <div class="cell__desc">这段时间绝不主动发消息</div>
+            </div>
+            <span class="switch" :class="{ on: settings.proactive.quietEnabled }" />
+          </button>
+          <div v-if="settings.proactive.quietEnabled" class="quiet-row">
+            <select
+              class="select quiet-select"
+              :value="settings.proactive.quietStart"
+              @change="settings.setProactive({ quietStart: Number(($event.target as HTMLSelectElement).value) })"
+            >
+              <option v-for="h in 24" :key="h" :value="h - 1">{{ h - 1 }}:00</option>
+            </select>
+            <span>到</span>
+            <select
+              class="select quiet-select"
+              :value="settings.proactive.quietEnd"
+              @change="settings.setProactive({ quietEnd: Number(($event.target as HTMLSelectElement).value) })"
+            >
+              <option v-for="h in 24" :key="h" :value="h - 1">{{ h - 1 }}:00</option>
+            </select>
+          </div>
         </template>
         <button class="cell" @click="settings.setFlag('groupInterest', !settings.flags.groupInterest)">
           <div class="cell__body">
@@ -497,6 +558,7 @@ function goBack() {
 
     <input ref="importInput" type="file" accept="application/json,.json" hidden @change="importData" />
     <input ref="chatBgInput" type="file" accept="image/*" hidden @change="pickChatBg" />
+    <input ref="themeInput" type="file" accept="application/json,.json" hidden @change="importTheme" />
   </div>
 </template>
 
@@ -586,19 +648,13 @@ function goBack() {
   color: var(--brand);
   background: rgba(0, 153, 255, 0.06);
 }
-.accents {
+.theme-pack {
   display: flex;
-  gap: 12px;
-  padding: 0 16px 14px;
+  gap: 8px;
+  padding: 0 16px 4px;
 }
-.accent {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-}
-.accent.on {
-  box-shadow: 0 0 0 2px var(--bg-sheet), 0 0 0 4px var(--text-3);
+.theme-pack .mini-btn {
+  margin-left: 0;
 }
 .mini-btn {
   font-size: 11.5px;
@@ -612,6 +668,19 @@ function goBack() {
 .mini-btn--dim {
   background: var(--bg-hover);
   color: var(--text-2);
+}
+.quiet-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 14px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.quiet-select {
+  width: 96px;
+  padding: 8px 10px;
+  font-size: 13px;
 }
 .slider {
   width: 100%;

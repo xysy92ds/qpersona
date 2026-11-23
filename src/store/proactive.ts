@@ -32,6 +32,7 @@ export const useProactiveStore = defineStore('proactive', {
         for (const conv of candidates) {
           const ch = contacts.characterById(conv.characterId)
           if (!ch) continue
+          if (conv.proactiveMuted) continue
           if (!ch.ext.toggles.chat || ch.ext.toggles.proactive === false) continue
           if (chat.streaming[conv.id]) continue
           if (
@@ -42,6 +43,9 @@ export const useProactiveStore = defineStore('proactive', {
               lastTs: conv.lastTs || conv.createdAt,
               lastProactiveAt: conv.lastProactiveAt,
               now,
+              quietEnabled: settings.proactive.quietEnabled,
+              quietStart: settings.proactive.quietStart,
+              quietEnd: settings.proactive.quietEnd,
             })
           ) {
             continue
@@ -57,6 +61,7 @@ export const useProactiveStore = defineStore('proactive', {
 
     async sendOne(conversationId: string, ch: Character) {
       const settings = useSettingsStore()
+      const contacts = useContactsStore()
       const chat = useChatStore()
       const memory = useMemoryStore()
       const profile = settings.profileFor('text_main', ch.ext.routing.text_main)
@@ -84,10 +89,13 @@ export const useProactiveStore = defineStore('proactive', {
         userName: settings.user.nickname,
         memoryText,
       })
+      const gapHours = (Date.now() - (contacts.conversationById(conversationId)?.lastTs ?? Date.now())) / 3600000
       messages.push({
         role: 'system',
         content:
-          '现在对方有一阵子没说话了。请主动发一条 QQ 消息：可以接上次的话题、提起你记得的事，或者说说你正在做什么。不要用「在吗」「在干嘛」这种客服式开场，1~2 句，直接输出消息内容。',
+          gapHours >= 6
+            ? '你们已经很久没联系了。请主动发一条 QQ 消息：自然一点，可以提起你记得的事、说说最近在做什么，不要用「在吗」「好久不见」这种客套开场。1~2 句，直接输出消息内容。'
+            : '现在对方有一阵子没说话了。请主动发一条 QQ 消息：接着你们上次的话题，或者提起你记得的事。不要用「在吗」「在干嘛」这种客服式开场，1~2 句，直接输出消息内容。',
       })
       let text = ''
       try {

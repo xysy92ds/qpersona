@@ -6,8 +6,8 @@ import { uid } from '@/core/util'
 
 export type ThemeMode = 'light' | 'dark' | 'auto'
 export type FontScale = 'small' | 'normal' | 'large'
-export type BubbleStyle = 'classic' | 'mint' | 'sunset' | 'sakura' | 'ink'
-export type AccentColor = 'blue' | 'pink' | 'green' | 'purple'
+export type BubbleStyle = 'classic' | 'mint' | 'sunset' | 'sakura' | 'ink' | 'lavender' | 'cocoa'
+export type TextStyle = 'default' | 'serif'
 
 export interface Flags {
   memory: boolean
@@ -20,7 +20,7 @@ export interface Flags {
 export interface Appearance {
   fontScale: FontScale
   bubble: BubbleStyle
-  accent: AccentColor
+  textStyle: TextStyle
   /** 聊天背景图 dataURL，空串 = 默认 */
   chatBackground: string
 }
@@ -39,6 +39,10 @@ export interface ProactivePlan {
   probability: number
   /** 距离上一条消息至少多少分钟 */
   minutes: number
+  /** 免打扰时段 */
+  quietEnabled: boolean
+  quietStart: number
+  quietEnd: number
 }
 
 export interface ChatPrefs {
@@ -67,10 +71,10 @@ const DEFAULTS: PersistedSettings = {
   bindings: {},
   theme: 'light',
   flags: { memory: true, groupInterest: true, tts: false, notify: true, sound: true },
-  appearance: { fontScale: 'normal', bubble: 'classic', accent: 'blue', chatBackground: '' },
+  appearance: { fontScale: 'normal', bubble: 'classic', textStyle: 'default', chatBackground: '' },
   chat: { autoSplit: true, showTime: true, showUsage: true },
   memoryPlan: { mode: 'messages', every: 40, minutes: 120 },
-  proactive: { enabled: false, probability: 30, minutes: 60 },
+  proactive: { enabled: false, probability: 30, minutes: 60, quietEnabled: true, quietStart: 23, quietEnd: 8 },
   user: DEFAULT_USER,
 }
 
@@ -161,7 +165,7 @@ export const useSettingsStore = defineStore('settings', {
       el.classList.toggle('dark', dark)
       el.dataset.font = this.appearance.fontScale
       el.dataset.bubble = this.appearance.bubble
-      el.dataset.accent = this.appearance.accent
+      el.dataset.text = this.appearance.textStyle
       el.style.colorScheme = dark ? 'dark' : 'light'
     },
 
@@ -187,8 +191,9 @@ export const useSettingsStore = defineStore('settings', {
       await this.persist()
     },
 
-    async setAccent(v: AccentColor) {
-      this.appearance.accent = v
+
+    async setTextStyle(v: TextStyle) {
+      this.appearance.textStyle = v
       this.applyAppearance()
       await this.persist()
     },

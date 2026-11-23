@@ -214,6 +214,12 @@ async function switchProfile(target: 'qq' | 'tavern') {
   router.push(`/chat/${c.id}`)
 }
 
+async function toggleProactiveMute() {
+  if (!conv.value) return
+  await contacts.touch(conv.value.id, { proactiveMuted: !conv.value.proactiveMuted })
+  showToast(conv.value.proactiveMuted ? '已允许这个会话的主动消息' : '已关闭这个会话的主动消息')
+}
+
 async function clearChat() {
   sheet.value = false
   await chat.clear(props.id)
@@ -410,7 +416,9 @@ async function pokeBy(name: string) {
         <Avatar :name="m.card.name" :src="m.ext.qq.avatar" :size="40" />
         <span class="cell__body">
           <span class="cell__title">{{ m.ext.qq.nickname || m.card.name }}</span>
-          <span class="cell__desc">{{ m.ext.qq.signature || m.card.tags?.join(' · ') || '群成员' }}</span>
+          <span class="cell__desc">
+            {{ conv.groupMuted?.[m.id] ? '已免打扰' : m.ext.qq.signature || m.card.tags?.join(' · ') || '群成员' }}
+          </span>
         </span>
       </button>
     </BottomSheet>
@@ -487,6 +495,13 @@ async function pokeBy(name: string) {
           <span class="cell__title">角色资料</span>
           <span class="cell__desc">查看设定、开关和提示词</span>
         </span>
+      </button>
+      <button v-if="ch && conv.kind === 'single'" class="cell" @click="toggleProactiveMute">
+        <span class="cell__body">
+          <span class="cell__title">允许主动消息</span>
+          <span class="cell__desc">全局开关打开时，这个会话是否允许 TA 主动找你</span>
+        </span>
+        <span class="switch" :class="{ on: !conv.proactiveMuted }" />
       </button>
       <button class="cell" @click="clearChat">
         <span class="cell__body">

@@ -156,6 +156,14 @@ export interface Conversation {
   groupLastSpoke?: Record<string, number>
   /** 被叫醒后保持活跃的分钟数，默认 5 */
   groupActiveMinutes?: number
+  /** 群成员免打扰：charId -> true */
+  groupMuted?: Record<string, boolean>
+  /** 严格上下文隔离：每个人只看到自己上次发言之后的消息 */
+  groupIsolation?: boolean
+  /** 每个成员在群里「已经看到」的时间戳 */
+  groupSeen?: Record<string, number>
+  /** 这个会话是否允许 AI 主动消息 */
+  proactiveMuted?: boolean
   /** 每个成员各自的群记忆游标 */
   groupMemoryTs?: Record<string, number>
   /** 群聊里能不能提起私聊记得的事，默认可以 */

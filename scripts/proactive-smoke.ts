@@ -1,7 +1,7 @@
 /**
  * 主动消息时机判断：概率、安静时长、上次主动时间。
  */
-import { shouldSendProactive } from '../src/core/proactive'
+import { inQuietHours, shouldSendProactive } from '../src/core/proactive'
 
 const base = {
   enabled: true,
@@ -16,7 +16,14 @@ console.log('2) too recent:', shouldSendProactive({ ...base, lastTs: base.now - 
 console.log('3) probability 0:', shouldSendProactive({ ...base, probability: 0, random: 0 }) === false)
 console.log('4) roll hit:', shouldSendProactive({ ...base, lastTs: base.now - 61 * 60000, random: 0.2 }) === true)
 console.log('5) roll miss:', shouldSendProactive({ ...base, lastTs: base.now - 61 * 60000, random: 0.9 }) === false)
+const at1 = new Date(2026, 0, 1, 1, 0).getTime()
+const at12 = new Date(2026, 0, 1, 12, 0).getTime()
+console.log('6) quiet 23-8 at 01:00:', inQuietHours(at1, 23, 8) === true, '| at 12:00:', inQuietHours(at12, 23, 8) === false)
 console.log(
-  '6) recent proactive blocks:',
+  '7) quiet hours block send:',
+  shouldSendProactive({ ...base, now: at1, lastTs: at1 - 61 * 60000, quietEnabled: true, quietStart: 23, quietEnd: 8, random: 0 }) === false,
+)
+console.log(
+  '8) recent proactive blocks:',
   shouldSendProactive({ ...base, lastTs: base.now - 61 * 60000, lastProactiveAt: base.now - 30 * 60000, random: 0 }) === false,
 )
