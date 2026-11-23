@@ -83,6 +83,8 @@ export interface QQIdentity {
   signature?: string
   /** dataURL 或 http(s) 链接 */
   avatar?: string
+  /** 角色主页封面背景 */
+  background?: string
   /** 群聊软触发用的兴趣标签 */
   interests: string[]
   /** 被叫到名字时额外匹配的别名 */
@@ -106,6 +108,8 @@ export interface PersonaExt {
     chat: boolean
     /** 该角色是否启用记忆总结 */
     memory: boolean
+    /** 该角色是否允许主动消息（全局开关打开时生效） */
+    proactive?: boolean
   }
   origin: 'import' | 'custom' | 'distill'
   /** 蒸馏得到的可量化语感统计，供角色页展示 */
@@ -142,6 +146,10 @@ export interface Conversation {
   muted?: boolean
   /** 记忆总结游标：这个时间之前的消息已经总结过 */
   memoryLastTs?: number
+  /** 上次记忆总结的时间（按时间触发用） */
+  memoryLastAt?: number
+  /** 上次主动发消息的时间 */
+  lastProactiveAt?: number
   /** 群聊激活状态：characterId -> 活跃截止时间戳 */
   groupActive?: Record<string, number>
   /** 群聊最近发言时间：characterId -> 时间戳 */
@@ -247,6 +255,8 @@ export interface AppUser {
   nickname: string
   qqNumber: string
   avatar?: string
+  /** 个人主页封面背景 */
+  background?: string
   signature: string
 }
 

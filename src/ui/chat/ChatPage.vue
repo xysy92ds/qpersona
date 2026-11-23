@@ -51,6 +51,16 @@ const subtitle = computed(() => {
   return conv.value?.kind === 'group' ? '群聊' : '在线'
 })
 const userAvatar = computed(() => settings.user.avatar || avatarSvg(settings.user.nickname))
+const chatBgStyle = computed(() => {
+  const bg = settings.appearance.chatBackground
+  if (!bg) return undefined
+  const overlay = settings.isDark ? 'rgba(10, 12, 16, 0.7)' : 'rgba(245, 247, 250, 0.52)'
+  return {
+    backgroundImage: `linear-gradient(${overlay}, ${overlay}), url(${bg})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+  }
+})
 const charAvatar = computed(() => characterAvatar(ch.value))
 
 type Item = { key: string; type: 'time'; text: string } | { key: string; type: 'msg'; msg: Message }
@@ -337,7 +347,13 @@ async function pokeBy(name: string) {
       <button class="iconbtn" aria-label="更多" @click="sheet = true"><EllipsisHorizontal /></button>
     </header>
 
-    <div ref="listEl" class="chat-list" :class="{ 'is-tavern': conv.profile === 'tavern' }" @scroll.passive="onScroll">
+    <div
+      ref="listEl"
+      class="chat-list"
+      :class="{ 'is-tavern': conv.profile === 'tavern' }"
+      :style="chatBgStyle"
+      @scroll.passive="onScroll"
+    >
       <div v-if="!msgs.length" class="chat-empty">发条消息，开始聊天吧。</div>
       <template v-for="item in items" :key="item.key">
         <div v-if="item.type === 'time'" class="time-tip">{{ item.text }}</div>

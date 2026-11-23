@@ -66,6 +66,33 @@ html[data-bubble='sunset'] {
   --on_bubble_host_text: #ffffff;
   --qq-host_bubble_text_link: #fff0dd;
 }
+html[data-bubble='sakura'] {
+  --qq-host_bubble_bg_css_value: #ff6f9c;
+  --on_bubble_host_text: #ffffff;
+  --qq-host_bubble_text_link: #ffe3ee;
+}
+html[data-bubble='ink'] {
+  --qq-host_bubble_bg_css_value: #3a3f4b;
+  --on_bubble_host_text: #ffffff;
+  --qq-host_bubble_text_link: #d9dde6;
+}
+
+/* 主题强调色 */
+html[data-accent='pink'] {
+  --brand: #ff5c8a;
+  --brand-deep: #e63e6d;
+  --brand-grad: linear-gradient(90deg, #ff9dbb 0%, #ff5c8a 55%, #e63e6d 100%);
+}
+html[data-accent='green'] {
+  --brand: #10b981;
+  --brand-deep: #059669;
+  --brand-grad: linear-gradient(90deg, #5eead4 0%, #10b981 55%, #047857 100%);
+}
+html[data-accent='purple'] {
+  --brand: #8b5cf6;
+  --brand-deep: #7c3aed;
+  --brand-grad: linear-gradient(90deg, #c4b5fd 0%, #8b5cf6 55%, #6d28d9 100%);
+}
 
 [data-theme='dark'] {
   --bg: #0f1115;

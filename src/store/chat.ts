@@ -795,6 +795,32 @@ export const useChatStore = defineStore('chat', {
       })
     },
 
+    /** AI 主动发来的一条消息 */
+    async receiveProactive(convId: string, characterId: string, text: string) {
+      await this.load(convId)
+      const contacts = useContactsStore()
+      const list = (this.byConv[convId] ??= [])
+      const msg = reactive<Message>({
+        id: uid('m'),
+        conversationId: convId,
+        role: 'assistant',
+        characterId,
+        text,
+        ts: nextTs(list),
+        status: 'ok',
+        kind: 'text',
+      })
+      await this.pushLocal(convId, msg)
+      const conv = contacts.conversationById(convId)
+      const viewing = typeof location !== 'undefined' && location.hash.includes(`/chat/${convId}`)
+      await contacts.touch(convId, {
+        lastText: text.slice(0, 80),
+        lastTs: msg.ts,
+        lastProactiveAt: msg.ts,
+        unread: viewing ? 0 : (conv?.unread ?? 0) + 1,
+      })
+    },
+
     /** 系统灰条：拍一拍、进群提示之类 */
     async addTip(convId: string, text: string) {
       await this.load(convId)

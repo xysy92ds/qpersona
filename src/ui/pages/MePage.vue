@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   BookOutline,
@@ -25,6 +25,19 @@ const contacts = useContactsStore()
 const msgCount = ref(0)
 const about = ref(false)
 
+const coverStyle = computed(() => {
+  const bg = settings.user.background
+  if (!bg) return undefined
+  const overlay = settings.isDark
+    ? 'linear-gradient(180deg, rgba(12,14,18,.55), rgba(12,14,18,.78))'
+    : 'linear-gradient(180deg, rgba(255,255,255,.45), rgba(255,255,255,.84))'
+  return {
+    backgroundImage: `${overlay}, url(${bg})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+  }
+})
+
 function goBack() {
   if (window.history.length > 1) router.back()
   else router.replace('/')
@@ -44,7 +57,7 @@ onMounted(async () => {
     </header>
 
     <div class="scroll">
-      <div class="cover">
+      <div class="cover" :class="{ 'has-bg': !!settings.user.background }" :style="coverStyle">
         <div class="cover__glow" />
         <div class="me">
           <Avatar :name="settings.user.nickname" :src="settings.user.avatar" :size="76" />
@@ -102,7 +115,7 @@ onMounted(async () => {
         <button class="cell" @click="about = true">
           <div class="cell-icon" style="background: #94a3b8"><InformationCircleOutline /></div>
           <div class="cell__body"><div class="cell__title">关于 Q伴</div></div>
-          <span class="cell__value">0.11.0</span>
+          <span class="cell__value">0.12.0</span>
           <ChevronForward class="chev" />
         </button>
       </div>
@@ -113,7 +126,7 @@ onMounted(async () => {
     <BottomSheet v-model="about" title="关于 Q伴">
       <div class="about">
         <div class="about__logo">Q</div>
-        <div class="about__name">Q伴 / QPersona 0.11.0</div>
+        <div class="about__name">Q伴 / QPersona 0.12.0</div>
         <p>
           看起来是 QQ，用起来也是 QQ —— 但好友全都是 AI 角色。<br />
           以 QQ 为交互外壳、以酒馆角色卡为人格内核，数据全部保存在这台设备上。

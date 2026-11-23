@@ -6,7 +6,8 @@ import { uid } from '@/core/util'
 
 export type ThemeMode = 'light' | 'dark' | 'auto'
 export type FontScale = 'small' | 'normal' | 'large'
-export type BubbleStyle = 'classic' | 'mint' | 'sunset'
+export type BubbleStyle = 'classic' | 'mint' | 'sunset' | 'sakura' | 'ink'
+export type AccentColor = 'blue' | 'pink' | 'green' | 'purple'
 
 export interface Flags {
   memory: boolean
@@ -19,6 +20,25 @@ export interface Flags {
 export interface Appearance {
   fontScale: FontScale
   bubble: BubbleStyle
+  accent: AccentColor
+  /** 聊天背景图 dataURL，空串 = 默认 */
+  chatBackground: string
+}
+
+export interface MemoryPlan {
+  mode: 'messages' | 'time'
+  /** 每多少条消息总结一次 */
+  every: number
+  /** 按时间模式：多少分钟一次 */
+  minutes: number
+}
+
+export interface ProactivePlan {
+  enabled: boolean
+  /** 到点后触发的概率 0~100 */
+  probability: number
+  /** 距离上一条消息至少多少分钟 */
+  minutes: number
 }
 
 export interface ChatPrefs {
@@ -37,6 +57,8 @@ interface PersistedSettings {
   flags: Flags
   appearance: Appearance
   chat: ChatPrefs
+  memoryPlan: MemoryPlan
+  proactive: ProactivePlan
   user: AppUser
 }
 
@@ -45,8 +67,10 @@ const DEFAULTS: PersistedSettings = {
   bindings: {},
   theme: 'light',
   flags: { memory: true, groupInterest: true, tts: false, notify: true, sound: true },
-  appearance: { fontScale: 'normal', bubble: 'classic' },
+  appearance: { fontScale: 'normal', bubble: 'classic', accent: 'blue', chatBackground: '' },
   chat: { autoSplit: true, showTime: true, showUsage: true },
+  memoryPlan: { mode: 'messages', every: 40, minutes: 120 },
+  proactive: { enabled: false, probability: 30, minutes: 60 },
   user: DEFAULT_USER,
 }
 
@@ -90,6 +114,8 @@ export const useSettingsStore = defineStore('settings', {
       this.flags = { ...DEFAULTS.flags, ...(saved.flags ?? {}) }
       this.appearance = { ...DEFAULTS.appearance, ...(saved.appearance ?? {}) }
       this.chat = { ...DEFAULTS.chat, ...(saved.chat ?? {}) }
+      this.memoryPlan = { ...DEFAULTS.memoryPlan, ...(saved.memoryPlan ?? {}) }
+      this.proactive = { ...DEFAULTS.proactive, ...(saved.proactive ?? {}) }
       this.user = { ...DEFAULT_USER, ...(saved.user ?? {}) }
       this.loaded = true
 
@@ -117,6 +143,8 @@ export const useSettingsStore = defineStore('settings', {
         flags: { ...this.flags },
         appearance: { ...this.appearance },
         chat: { ...this.chat },
+        memoryPlan: { ...this.memoryPlan },
+        proactive: { ...this.proactive },
         user: { ...this.user },
       }
     },
@@ -133,6 +161,7 @@ export const useSettingsStore = defineStore('settings', {
       el.classList.toggle('dark', dark)
       el.dataset.font = this.appearance.fontScale
       el.dataset.bubble = this.appearance.bubble
+      el.dataset.accent = this.appearance.accent
       el.style.colorScheme = dark ? 'dark' : 'light'
     },
 
@@ -155,6 +184,27 @@ export const useSettingsStore = defineStore('settings', {
     async setBubble(v: BubbleStyle) {
       this.appearance.bubble = v
       this.applyAppearance()
+      await this.persist()
+    },
+
+    async setAccent(v: AccentColor) {
+      this.appearance.accent = v
+      this.applyAppearance()
+      await this.persist()
+    },
+
+    async setChatBackground(dataUrl: string) {
+      this.appearance.chatBackground = dataUrl
+      await this.persist()
+    },
+
+    async setMemoryPlan(patch: Partial<MemoryPlan>) {
+      this.memoryPlan = { ...this.memoryPlan, ...patch }
+      await this.persist()
+    },
+
+    async setProactive(patch: Partial<ProactivePlan>) {
+      this.proactive = { ...this.proactive, ...patch }
       await this.persist()
     },
 

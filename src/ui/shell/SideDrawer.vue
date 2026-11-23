@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   BookOutline,
   ChevronForward,
@@ -17,6 +17,7 @@ import { useContactsStore } from '@/store/contacts'
 import { db } from '@/core/db'
 
 const router = useRouter()
+const route = useRoute()
 const ui = useUiStore()
 const settings = useSettingsStore()
 const contacts = useContactsStore()
@@ -27,6 +28,13 @@ const dragX = ref(0)
 let touchX = 0
 let touchY = 0
 let dragStarted = false
+
+watch(
+  () => route.fullPath,
+  () => {
+    if (ui.drawerOpen) ui.closeDrawer()
+  },
+)
 
 watch(
   () => ui.drawerOpen,
@@ -112,7 +120,7 @@ function onTouchEnd() {
           <button class="drawer-mode" @click="settings.toggleTheme()">
             <MoonOutline /> {{ settings.isDark ? '切到浅色' : '夜间模式' }}
           </button>
-          <span class="drawer-ver">Q伴 0.11.0</span>
+          <span class="drawer-ver">Q伴 0.12.0</span>
         </div>
         <div class="drawer-hint">向左滑动关闭</div>
       </aside>

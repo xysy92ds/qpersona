@@ -22,6 +22,7 @@ const ch = computed(() => contacts.characterById(props.id))
 const tab = ref<'qq' | 'tavern'>('qq')
 const confirmDelete = ref(false)
 const avatarInput = ref<HTMLInputElement>()
+const bgInput = ref<HTMLInputElement>()
 const memoryBusy = ref(false)
 
 const memoryList = computed(() => memory.memoriesOf(ch.value?.id))
@@ -66,6 +67,19 @@ async function removeMemory(id: string) {
   showToast('已删除这条记忆')
 }
 
+const heroStyle = computed(() => {
+  const bg = ch.value?.ext.qq.background
+  if (!bg) return undefined
+  const overlay = settings.isDark
+    ? 'linear-gradient(180deg, rgba(12,14,18,.6), rgba(12,14,18,.78))'
+    : 'linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.86))'
+  return {
+    backgroundImage: `${overlay}, url(${bg})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+  }
+})
+
 const promptText = computed(() =>
   ch.value ? buildSystemPrompt(ch.value, tab.value, settings.user.nickname) : '',
 )
@@ -95,6 +109,28 @@ async function pickAvatar(e: Event) {
   }
 }
 
+async function pickBackground(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || !ch.value) return
+  try {
+    const data = await imageToDataUrl(file, 1400)
+    const ext = { ...ch.value.ext, qq: { ...ch.value.ext.qq, background: data } }
+    await contacts.updateCharacter(ch.value.id, { ext })
+    showToast('主页背景已更新')
+  } catch {
+    showToast('这张图读不出来，换一张试试')
+  }
+}
+
+async function resetBackground() {
+  if (!ch.value) return
+  const ext = { ...ch.value.ext, qq: { ...ch.value.ext.qq, background: '' } }
+  await contacts.updateCharacter(ch.value.id, { ext })
+  showToast('已恢复默认背景')
+}
+
 async function resetAvatar() {
   if (!ch.value) return
   const ext = { ...ch.value.ext, qq: { ...ch.value.ext.qq, avatar: '' } }
@@ -102,11 +138,15 @@ async function resetAvatar() {
   showToast('已恢复默认头像')
 }
 
-async function toggle(key: 'chat' | 'memory') {
+async function toggle(key: 'chat' | 'memory' | 'proactive') {
   if (!ch.value) return
-  const ext = { ...ch.value.ext, toggles: { ...ch.value.ext.toggles, [key]: !ch.value.ext.toggles[key] } }
+  const current =
+    key === 'proactive' ? ch.value.ext.toggles.proactive !== false : ch.value.ext.toggles[key]
+  const ext = { ...ch.value.ext, toggles: { ...ch.value.ext.toggles, [key]: !current } }
   await contacts.updateCharacter(ch.value.id, { ext })
-  showToast(key === 'chat' ? (ext.toggles.chat ? '已开启主对话' : '已关闭主对话，不会再调用模型') : ext.toggles.memory ? '已开启记忆总结' : '已关闭记忆总结')
+  if (key === 'chat') showToast(ext.toggles.chat ? '已开启主对话' : '已关闭主对话，不会再调用模型')
+  else if (key === 'memory') showToast(ext.toggles.memory ? '已开启记忆总结' : '已关闭记忆总结')
+  else showToast(ext.toggles.proactive ? 'TA 可以主动找你了' : '已关闭 TA 的主动消息')
 }
 
 async function onRoute(e: Event) {
@@ -141,7 +181,7 @@ function goBack() {
     </header>
 
     <div class="scroll">
-      <div class="hero">
+      <div class="hero" :style="heroStyle">
         <button class="hero__avatar" aria-label="更换头像" @click="avatarInput?.click()">
           <Avatar :name="ch.card.name" :src="ch.ext.qq.avatar" :size="72" />
           <span class="hero__cam"><CameraOutline /></span>
@@ -193,9 +233,29 @@ function goBack() {
         <button class="cell" @click="toggle('memory')">
           <div class="cell__body">
             <div class="cell__title">记忆总结</div>
-            <div class="cell__desc">每 10 轮后台总结一次，不影响聊天</div>
+            <div class="cell__desc">按设置里的频率后台整理，不影响聊天</div>
           </div>
           <span class="switch" :class="{ on: ch.ext.toggles.memory }" />
+        </button>
+        <button class="cell" @click="toggle('proactive')">
+          <div class="cell__body">
+            <div class="cell__title">主动消息</div>
+            <div class="cell__desc">全局开关打开时，TA 可能主动找你</div>
+          </div>
+          <span class="switch" :class="{ on: ch.ext.toggles.proactive !== false }" />
+        </button>
+        <button class="cell" @click="bgInput?.click()">
+          <div class="cell__body">
+            <div class="cell__title">主页背景</div>
+            <div class="cell__desc">{{ ch.ext.qq.background ? '点一下换一张' : '给 TA 的主页加一张封面' }}</div>
+          </div>
+          <span class="cell__value">{{ ch.ext.qq.background ? '更换' : '上传' }}</span>
+        </button>
+        <button v-if="ch.ext.qq.background" class="cell" @click="resetBackground">
+          <div class="cell__body">
+            <div class="cell__title">恢复默认背景</div>
+            <div class="cell__desc">去掉主页封面图</div>
+          </div>
         </button>
         <button v-if="ch.ext.qq.avatar" class="cell" @click="resetAvatar">
           <div class="cell__body">
@@ -224,7 +284,7 @@ function goBack() {
       </div>
       <div class="sheet-block">
         <div v-if="!memoryList.length" class="mem-empty">
-          聊满 10 轮会在后台自动整理；也可以点「立即整理」。整理结果会按相关度注入到提示词里。
+          达到设置里的频率会在后台自动整理；也可以点「立即整理」。整理结果会按相关度注入到提示词里。
         </div>
         <div v-for="m in memoryList" :key="m.id" class="mem-item">
           <span v-if="m.source === 'group'" class="mem-source">群聊</span>
@@ -265,6 +325,7 @@ function goBack() {
     </div>
 
     <input ref="avatarInput" type="file" accept="image/*" hidden @change="pickAvatar" />
+    <input ref="bgInput" type="file" accept="image/*" hidden @change="pickBackground" />
 
     <BottomSheet v-model="confirmDelete" title="删除这个角色？">
       <div class="hint">「{{ ch.card.name }}」的角色卡和全部聊天记录都会从本地删除，无法撤销。</div>

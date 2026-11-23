@@ -123,7 +123,13 @@ export const useMemoryStore = defineStore('memory', {
           const fresh = rows.filter(
             (m) => m.ts > after && (m.role === 'user' || m.role === 'assistant') && m.kind !== 'tip',
           )
-          if (fresh.length < 10) return
+          const plan = settings.memoryPlan
+          if (plan.mode === 'messages') {
+            if (fresh.length < plan.every) return
+          } else {
+            const lastAt = conv.memoryLastAt ?? conv.createdAt
+            if (fresh.length < 5 || Date.now() - lastAt < plan.minutes * 60000) return
+          }
           await this.summarize(conversationId)
         })
         .catch((e) => console.warn('[memory] summarize failed', e))
@@ -152,7 +158,13 @@ export const useMemoryStore = defineStore('memory', {
             const fresh = rows.filter(
               (m) => m.ts > after && (m.role === 'user' || m.role === 'assistant') && m.kind !== 'tip',
             )
-            if (fresh.length < 8) return
+            const plan = settings.memoryPlan
+            if (plan.mode === 'messages') {
+              if (fresh.length < plan.every) return
+            } else {
+              const lastAt = current.memoryLastAt ?? current.createdAt
+              if (fresh.length < 8 || Date.now() - lastAt < plan.minutes * 60000) return
+            }
             await this.summarize(conversationId, { characterId: ch.id, source: 'group' })
           })
           .catch((e) => console.warn('[memory] group summarize failed', e))
@@ -280,9 +292,10 @@ ${source === 'group' ? '- 这是群聊记录：只记与你（角色）和对方
         if (source === 'group') {
           await contacts.touch(conversationId, {
             groupMemoryTs: { ...(conv.groupMemoryTs ?? {}), [ch.id]: lastTs },
+            memoryLastAt: Date.now(),
           })
         } else {
-          await contacts.touch(conversationId, { memoryLastTs: lastTs })
+          await contacts.touch(conversationId, { memoryLastTs: lastTs, memoryLastAt: Date.now() })
         }
         await this.load(ch.id, true)
         this.lastRun[key] = Date.now()

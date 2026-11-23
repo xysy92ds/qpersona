@@ -10,7 +10,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const files = ['smoke.ts', 'store-smoke.ts', 'stream-smoke.ts', 'memory-smoke.ts', 'group-smoke.ts', 'vision-smoke.ts', 'audio-smoke.ts', 'distill-smoke.ts']
+const files = ['smoke.ts', 'store-smoke.ts', 'stream-smoke.ts', 'memory-smoke.ts', 'group-smoke.ts', 'vision-smoke.ts', 'audio-smoke.ts', 'distill-smoke.ts', 'proactive-smoke.ts']
 const out = mkdtempSync(join(tmpdir(), 'qpersona-smoke-'))
 
 for (const file of files) {

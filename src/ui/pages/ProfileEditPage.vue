@@ -11,13 +11,16 @@ const router = useRouter()
 const settings = useSettingsStore()
 
 const avatar = ref(settings.user.avatar || '')
+const background = ref(settings.user.background || '')
 const nickname = ref(settings.user.nickname)
 const qqNumber = ref(settings.user.qqNumber)
 const signature = ref(settings.user.signature)
 const fileInput = ref<HTMLInputElement>()
+const bgInput = ref<HTMLInputElement>()
 
 onMounted(() => {
   avatar.value = settings.user.avatar || ''
+  background.value = settings.user.background || ''
 })
 
 async function pickAvatar(e: Event) {
@@ -31,6 +34,18 @@ async function pickAvatar(e: Event) {
   }
   try {
     avatar.value = await imageToDataUrl(file, 360)
+  } catch {
+    showToast('这张图读不出来，换一张试试')
+  }
+}
+
+async function pickBackground(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  try {
+    background.value = await imageToDataUrl(file, 1400)
   } catch {
     showToast('这张图读不出来，换一张试试')
   }
@@ -61,6 +76,7 @@ async function save() {
     qqNumber: qq,
     signature: signature.value.trim(),
     avatar: avatar.value,
+    background: background.value,
   })
   showToast('资料已更新')
   if (window.history.length > 1) router.back()
@@ -97,6 +113,22 @@ function goBack() {
         </div>
       </div>
 
+      <div class="bg-card">
+        <div class="bg-card__preview" :style="background ? { backgroundImage: `url(${background})` } : undefined">
+          <span v-if="!background" class="bg-card__empty">还没有主页背景</span>
+        </div>
+        <div class="bg-card__row">
+          <div>
+            <div class="avatar-title">主页背景</div>
+            <div class="avatar-desc">显示在「我的」主页顶部</div>
+          </div>
+          <div class="avatar-links">
+            <button class="mini" @click="bgInput?.click()">选择图片</button>
+            <button v-if="background" class="mini mini--dim" @click="background = ''">恢复默认</button>
+          </div>
+        </div>
+      </div>
+
       <div class="sheet-block">
         <label class="field">
           <span class="field__label">昵称</span>
@@ -124,6 +156,7 @@ function goBack() {
     </div>
 
     <input ref="fileInput" type="file" accept="image/*" hidden @change="pickAvatar" />
+    <input ref="bgInput" type="file" accept="image/*" hidden @change="pickBackground" />
   </div>
 </template>
 
@@ -203,6 +236,35 @@ function goBack() {
 .mini--dim {
   background: var(--bg-hover);
   color: var(--text-2);
+}
+.bg-card {
+  margin: 12px;
+  border-radius: 16px;
+  background: var(--bg-sheet);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.bg-card__preview {
+  height: 120px;
+  background: linear-gradient(135deg, rgba(0, 153, 255, 0.16), rgba(123, 91, 255, 0.14));
+  background-size: cover;
+  background-position: center;
+  display: grid;
+  place-items: center;
+}
+.bg-card__empty {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.bg-card__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.bg-card__row > div:first-child {
+  flex: 1;
+  min-width: 0;
 }
 .sheet-block {
   background: var(--bg-sheet);

@@ -20,11 +20,18 @@ import {
   TrashOutline,
   VolumeHighOutline,
 } from '@vicons/ionicons5'
-import { useSettingsStore, type FontScale, type BubbleStyle, type ThemeMode } from '@/store/settings'
+import {
+  useSettingsStore,
+  type AccentColor,
+  type BubbleStyle,
+  type FontScale,
+  type ThemeMode,
+} from '@/store/settings'
 import { useContactsStore } from '@/store/contacts'
 import { useChatStore } from '@/store/chat'
 import { db } from '@/core/db'
 import { showToast } from '@/ui/common/toast'
+import { imageToDataUrl } from '@/core/util'
 
 const router = useRouter()
 const settings = useSettingsStore()
@@ -36,6 +43,7 @@ const confirmWipe = ref(false)
 const confirmImport = ref(false)
 const importInput = ref<HTMLInputElement>()
 const storageText = ref('计算中…')
+const chatBgInput = ref<HTMLInputElement>()
 
 const themes: { value: ThemeMode; label: string }[] = [
   { value: 'light', label: '浅色' },
@@ -51,6 +59,15 @@ const bubbles: { value: BubbleStyle; label: string; color: string }[] = [
   { value: 'classic', label: '经典蓝', color: '#0099ff' },
   { value: 'mint', label: '薄荷绿', color: '#23a67b' },
   { value: 'sunset', label: '落日橙', color: '#ff8a3d' },
+  { value: 'sakura', label: '樱花粉', color: '#ff6f9c' },
+  { value: 'ink', label: '墨色', color: '#2f3542' },
+]
+
+const accents: { value: AccentColor; label: string; color: string }[] = [
+  { value: 'blue', label: '默认蓝', color: '#0099ff' },
+  { value: 'pink', label: '樱花粉', color: '#ff5c8a' },
+  { value: 'green', label: '松石绿', color: '#10b981' },
+  { value: 'purple', label: '暮光紫', color: '#8b5cf6' },
 ]
 
 const counts = computed(
@@ -66,6 +83,20 @@ onMounted(async () => {
     storageText.value = '本地存储'
   }
 })
+
+async function pickChatBg(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  try {
+    const data = await imageToDataUrl(file, 1400)
+    await settings.setChatBackground(data)
+    showToast('聊天背景已更新')
+  } catch {
+    showToast('这张图读不出来，换一张试试')
+  }
+}
 
 async function exportData() {
   const [characters, conversations, messages, memories, stickers] = await Promise.all([
@@ -236,6 +267,30 @@ function goBack() {
             {{ b.label }}
           </button>
         </div>
+        <div class="cell" style="cursor: default">
+          <div class="cell-icon" style="background: #64748b"><ColorPaletteOutline /></div>
+          <div class="cell__body"><div class="cell__title">主题色</div><div class="cell__desc">导航、按钮和头像的强调色</div></div>
+        </div>
+        <div class="accents">
+          <button
+            v-for="a in accents"
+            :key="a.value"
+            class="accent"
+            :style="{ background: a.color }"
+            :class="{ on: settings.appearance.accent === a.value }"
+            :aria-label="a.label"
+            @click="settings.setAccent(a.value)"
+          />
+        </div>
+        <div class="cell">
+          <div class="cell-icon" style="background: #0ea5e9"><ImageOutline /></div>
+          <div class="cell__body">
+            <div class="cell__title">聊天背景</div>
+            <div class="cell__desc">{{ settings.appearance.chatBackground ? '已设置自定义背景' : '默认的浅灰聊天底' }}</div>
+          </div>
+          <button class="mini-btn" @click="chatBgInput?.click()">上传</button>
+          <button v-if="settings.appearance.chatBackground" class="mini-btn mini-btn--dim" @click="settings.setChatBackground('')">恢复</button>
+        </div>
       </div>
 
       <div class="group-title">消息</div>
@@ -300,10 +355,71 @@ function goBack() {
         <button class="cell" @click="settings.setFlag('memory', !settings.flags.memory)">
           <div class="cell__body">
             <div class="cell__title">记忆总结</div>
-            <div class="cell__desc">每 10 轮后台总结一次长期记忆</div>
+            <div class="cell__desc">按下面设定的频率在后台整理</div>
           </div>
           <span class="switch" :class="{ on: settings.flags.memory }" />
         </button>
+        <div class="cell" style="cursor: default">
+          <div class="cell__body">
+            <div class="cell__title">记忆总结频率</div>
+            <div class="cell__desc">
+              {{ settings.memoryPlan.mode === 'messages'
+                ? `每 ${settings.memoryPlan.every} 条消息整理一次`
+                : `每 ${settings.memoryPlan.minutes} 分钟最多整理一次` }}
+            </div>
+          </div>
+        </div>
+        <div class="seg-wrap">
+          <div class="seg">
+            <button class="seg__btn" :class="{ on: settings.memoryPlan.mode === 'messages' }" @click="settings.setMemoryPlan({ mode: 'messages' })">按消息</button>
+            <button class="seg__btn" :class="{ on: settings.memoryPlan.mode === 'time' }" @click="settings.setMemoryPlan({ mode: 'time' })">按时间</button>
+          </div>
+        </div>
+        <div v-if="settings.memoryPlan.mode === 'messages'" class="seg-wrap">
+          <div class="seg">
+            <button v-for="n in [20, 40, 80, 120]" :key="n" class="seg__btn" :class="{ on: settings.memoryPlan.every === n }" @click="settings.setMemoryPlan({ every: n })">{{ n }} 条</button>
+          </div>
+        </div>
+        <div v-else class="seg-wrap">
+          <div class="seg">
+            <button v-for="n in [30, 60, 120, 240]" :key="n" class="seg__btn" :class="{ on: settings.memoryPlan.minutes === n }" @click="settings.setMemoryPlan({ minutes: n })">{{ n }} 分钟</button>
+          </div>
+        </div>
+        <button class="cell" @click="settings.setProactive({ enabled: !settings.proactive.enabled })">
+          <div class="cell__body">
+            <div class="cell__title">AI 主动消息</div>
+            <div class="cell__desc">安静一段时间后，按概率主动找你说话</div>
+          </div>
+          <span class="switch" :class="{ on: settings.proactive.enabled }" />
+        </button>
+        <template v-if="settings.proactive.enabled">
+          <div class="cell" style="cursor: default">
+            <div class="cell__body">
+              <div class="cell__title">触发概率</div>
+              <div class="cell__desc">到点后有多大概率真的发</div>
+            </div>
+            <span class="cell__value">{{ settings.proactive.probability }}%</span>
+          </div>
+          <div class="seg-wrap">
+            <input
+              class="slider"
+              type="range"
+              min="10"
+              max="100"
+              step="5"
+              :value="settings.proactive.probability"
+              @input="settings.setProactive({ probability: Number(($event.target as HTMLInputElement).value) })"
+            />
+          </div>
+          <div class="cell" style="cursor: default">
+            <div class="cell__body"><div class="cell__title">安静多久后</div></div>
+          </div>
+          <div class="seg-wrap">
+            <div class="seg">
+              <button v-for="n in [15, 30, 60, 120]" :key="n" class="seg__btn" :class="{ on: settings.proactive.minutes === n }" @click="settings.setProactive({ minutes: n })">{{ n }} 分</button>
+            </div>
+          </div>
+        </template>
         <button class="cell" @click="settings.setFlag('groupInterest', !settings.flags.groupInterest)">
           <div class="cell__body">
             <div class="cell__title">群聊兴趣调度</div>
@@ -380,6 +496,7 @@ function goBack() {
     </div>
 
     <input ref="importInput" type="file" accept="application/json,.json" hidden @change="importData" />
+    <input ref="chatBgInput" type="file" accept="image/*" hidden @change="pickChatBg" />
   </div>
 </template>
 
@@ -468,6 +585,37 @@ function goBack() {
   border-color: var(--brand);
   color: var(--brand);
   background: rgba(0, 153, 255, 0.06);
+}
+.accents {
+  display: flex;
+  gap: 12px;
+  padding: 0 16px 14px;
+}
+.accent {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+}
+.accent.on {
+  box-shadow: 0 0 0 2px var(--bg-sheet), 0 0 0 4px var(--text-3);
+}
+.mini-btn {
+  font-size: 11.5px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: rgba(0, 153, 255, 0.1);
+  color: var(--brand);
+  flex: none;
+  margin-left: 6px;
+}
+.mini-btn--dim {
+  background: var(--bg-hover);
+  color: var(--text-2);
+}
+.slider {
+  width: 100%;
+  accent-color: var(--brand);
 }
 .bubble-chip__dot {
   width: 12px;
