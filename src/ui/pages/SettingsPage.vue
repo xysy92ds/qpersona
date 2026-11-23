@@ -80,6 +80,27 @@ onMounted(async () => {
   }
 })
 
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, Math.round(n)))
+}
+
+function setMemoryCustom(e: Event) {
+  const n = Number((e.target as HTMLInputElement).value)
+  if (!Number.isFinite(n)) return
+  if (settings.memoryPlan.mode === 'messages') settings.setMemoryPlan({ every: clamp(n, 5, 500) })
+  else settings.setMemoryPlan({ minutes: clamp(n, 5, 1440) })
+}
+
+function setProbabilityCustom(e: Event) {
+  const n = Number((e.target as HTMLInputElement).value)
+  if (Number.isFinite(n)) settings.setProactive({ probability: clamp(n, 1, 100) })
+}
+
+function setMinutesCustom(e: Event) {
+  const n = Number((e.target as HTMLInputElement).value)
+  if (Number.isFinite(n)) settings.setProactive({ minutes: clamp(n, 1, 1440) })
+}
+
 async function exportTheme() {
   const payload = {
     app: 'qpersona-theme',
@@ -422,6 +443,18 @@ function goBack() {
             <button v-for="n in [30, 60, 120, 240]" :key="n" class="seg__btn" :class="{ on: settings.memoryPlan.minutes === n }" @click="settings.setMemoryPlan({ minutes: n })">{{ n }} 分钟</button>
           </div>
         </div>
+        <div class="custom-row">
+          <span>自定义</span>
+          <input
+            class="num-input"
+            type="number"
+            :min="settings.memoryPlan.mode === 'messages' ? 5 : 5"
+            :max="settings.memoryPlan.mode === 'messages' ? 500 : 1440"
+            :value="settings.memoryPlan.mode === 'messages' ? settings.memoryPlan.every : settings.memoryPlan.minutes"
+            @change="setMemoryCustom"
+          />
+          <span>{{ settings.memoryPlan.mode === 'messages' ? '条' : '分钟' }}</span>
+        </div>
         <button class="cell" @click="settings.setProactive({ enabled: !settings.proactive.enabled })">
           <div class="cell__body">
             <div class="cell__title">AI 主动消息</div>
@@ -448,6 +481,11 @@ function goBack() {
               @input="settings.setProactive({ probability: Number(($event.target as HTMLInputElement).value) })"
             />
           </div>
+          <div class="custom-row">
+            <span>自定义</span>
+            <input class="num-input" type="number" min="1" max="100" :value="settings.proactive.probability" @change="setProbabilityCustom" />
+            <span>%</span>
+          </div>
           <div class="cell" style="cursor: default">
             <div class="cell__body"><div class="cell__title">安静多久后</div></div>
           </div>
@@ -455,6 +493,11 @@ function goBack() {
             <div class="seg">
               <button v-for="n in [15, 30, 60, 120]" :key="n" class="seg__btn" :class="{ on: settings.proactive.minutes === n }" @click="settings.setProactive({ minutes: n })">{{ n }} 分</button>
             </div>
+          </div>
+          <div class="custom-row">
+            <span>自定义</span>
+            <input class="num-input" type="number" min="1" max="1440" :value="settings.proactive.minutes" @change="setMinutesCustom" />
+            <span>分钟</span>
           </div>
           <button class="cell" @click="settings.setProactive({ quietEnabled: !settings.proactive.quietEnabled })">
             <div class="cell__body">
@@ -668,6 +711,23 @@ function goBack() {
 .mini-btn--dim {
   background: var(--bg-hover);
   color: var(--text-2);
+}
+.custom-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 14px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.num-input {
+  width: 88px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  color: var(--text);
+  font-size: 13px;
+  text-align: center;
 }
 .quiet-row {
   display: flex;
