@@ -27,6 +27,7 @@ const form = reactive({
   priceIn: '',
   priceOut: '',
   vision: false,
+  voice: '',
 })
 
 const isEdit = computed(() => !!form.id)
@@ -49,6 +50,7 @@ function openNew() {
     priceIn: '',
     priceOut: '',
     vision: false,
+    voice: '',
   })
   deleting.value = false
   showEditor.value = true
@@ -65,6 +67,7 @@ function openEdit(p: ApiProfile) {
     priceIn: p.priceIn != null ? String(p.priceIn) : '',
     priceOut: p.priceOut != null ? String(p.priceOut) : '',
     vision: !!p.vision,
+    voice: p.voice ?? '',
   })
   deleting.value = false
   showEditor.value = true
@@ -103,6 +106,7 @@ async function save() {
     priceIn: num(form.priceIn),
     priceOut: num(form.priceOut),
     vision: form.vision,
+    voice: form.voice.trim() || undefined,
   }
   if (isEdit.value) await settings.updateProfile(form.id, payload)
   else await settings.addProfile(payload)
@@ -281,6 +285,10 @@ const boundSlots = computed(() => {
           <small>多模态模型直接看图；不支持就留空，用「图片识别」槽位写描述</small>
         </span>
       </button>
+      <label class="field">
+        <span class="field__label">TTS 音色（可选）</span>
+        <input v-model="form.voice" class="input" placeholder="alloy / nova / shimmer…" />
+      </label>
       <div class="price-row">
         <label class="field">
           <span class="field__label">输入单价</span>

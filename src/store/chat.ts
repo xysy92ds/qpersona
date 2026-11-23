@@ -97,7 +97,7 @@ export const useChatStore = defineStore('chat', {
       controllers.get(convId)?.abort()
     },
 
-    async send(convId: string, raw: string, quote?: QuotePayload) {
+    async send(convId: string, raw: string, quote?: QuotePayload, opts?: { call?: boolean }) {
       const text = raw.trim()
       if (!text) return
 
@@ -119,7 +119,7 @@ export const useChatStore = defineStore('chat', {
       }
       await this.pushLocal(convId, userMsg)
       await contacts.touch(convId, { lastText: text, lastTs: userMsg.ts, unread: 0 })
-      await this.dispatchReply(convId)
+      await this.dispatchReply(convId, opts)
     },
 
     async sendSticker(convId: string, sticker: Sticker) {
@@ -191,14 +191,14 @@ export const useChatStore = defineStore('chat', {
     },
 
     /** 单聊还是群聊，从这里分流 */
-    async dispatchReply(convId: string) {
+    async dispatchReply(convId: string, opts?: { call?: boolean }) {
       if (this.streaming[convId]) {
         this.pendingReply[convId] = true
         return
       }
       const conv = useContactsStore().conversationById(convId)
       if (conv?.kind === 'group') await this.respondGroup(convId)
-      else await this.respond(convId)
+      else await this.respond(convId, opts)
     },
 
     async sendImage(convId: string, image: ImagePayload) {
@@ -535,7 +535,7 @@ export const useChatStore = defineStore('chat', {
     },
 
     /** 真正调用模型、流式写回回复的那一段 */
-    async respond(convId: string) {
+    async respond(convId: string, opts?: { call?: boolean }) {
       if (this.streaming[convId]) return
       const contacts = useContactsStore()
       const settings = useSettingsStore()
@@ -607,6 +607,7 @@ export const useChatStore = defineStore('chat', {
           userName: settings.user.nickname,
           memoryText,
           vision: !!profile.vision,
+          call: !!opts?.call,
           stickers: stickerStore.list.map((s) => ({ name: s.name, annotation: s.annotation })),
         })
       } catch (e) {
@@ -664,7 +665,7 @@ export const useChatStore = defineStore('chat', {
 
       // QQ 端：把多行回复拆成连续几条气泡；[表情:名字] 会换成真的表情包
       let preview = reply.text
-      if (reply.status === 'ok' && conv.profile === 'qq') {
+      if (reply.status === 'ok' && conv.profile === 'qq' && !opts?.call) {
         const rawParts = settings.chat.autoSplit ? splitBubbles(reply.text) : [reply.text]
         const stickerList = stickerStore.list
         const outputs = rawParts.map((part) => {

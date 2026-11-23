@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChevronBack, EllipsisHorizontal, VolumeHighOutline, VolumeMuteOutline } from '@vicons/ionicons5'
+import {
+  CallOutline,
+  ChevronBack,
+  EllipsisHorizontal,
+  VolumeHighOutline,
+  VolumeMuteOutline,
+} from '@vicons/ionicons5'
 import MessageItem from './MessageItem.vue'
 import Composer from './Composer.vue'
 import BottomSheet from '@/ui/common/BottomSheet.vue'
@@ -12,6 +18,7 @@ import { useSettingsStore } from '@/store/settings'
 import { avatarSvg, characterAvatar } from '@/core/avatar'
 import { chatTime } from '@/core/util'
 import { showToast } from '@/ui/common/toast'
+import { useUiStore } from '@/store/ui'
 import { ping } from '@/core/audio'
 import type {
   CardPayload,
@@ -29,6 +36,7 @@ const router = useRouter()
 const contacts = useContactsStore()
 const chat = useChatStore()
 const settings = useSettingsStore()
+const ui = useUiStore()
 
 const conv = computed(() => contacts.conversationById(props.id))
 const msgs = computed(() => chat.messagesOf(props.id))
@@ -301,6 +309,22 @@ async function pokeBy(name: string) {
         <div class="topbar__title">{{ title }}</div>
         <div class="topbar__sub">{{ subtitle }}</div>
       </div>
+      <button
+        v-if="ch && conv.kind === 'single'"
+        class="iconbtn"
+        aria-label="语音通话"
+        @click="ui.openCall(conv.id)"
+      >
+        <CallOutline />
+      </button>
+      <button
+        v-else
+        class="iconbtn"
+        aria-label="语音通话"
+        @click="showToast('群语音 · 后面做')"
+      >
+        <CallOutline />
+      </button>
       <button
         class="iconbtn"
         :style="settings.flags.tts ? 'color: var(--brand)' : ''"

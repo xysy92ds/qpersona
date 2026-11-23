@@ -52,6 +52,8 @@ export interface ApiProfile {
   priceOut?: number
   /** 这个模型能不能直接看图（多模态） */
   vision?: boolean
+  /** TTS 音色，留空用 alloy */
+  voice?: string
   createdAt: number
 }
 

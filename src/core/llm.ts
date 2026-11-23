@@ -33,7 +33,7 @@ function headersOf(profile: ApiProfile): Record<string, string> {
   return h
 }
 
-async function httpError(res: Response): Promise<Error> {
+export async function httpError(res: Response): Promise<Error> {
   let detail = ''
   try {
     const text = await res.text()

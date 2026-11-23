@@ -4,6 +4,7 @@ import { defineStore } from 'pinia'
 export const useUiStore = defineStore('ui', {
   state: () => ({
     drawerOpen: false,
+    callConvId: null as string | null,
   }),
   actions: {
     openDrawer() {
@@ -11,6 +12,12 @@ export const useUiStore = defineStore('ui', {
     },
     closeDrawer() {
       this.drawerOpen = false
+    },
+    openCall(convId: string) {
+      this.callConvId = convId
+    },
+    closeCall() {
+      this.callConvId = null
     },
   },
 })

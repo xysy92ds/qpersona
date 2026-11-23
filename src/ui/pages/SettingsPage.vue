@@ -77,7 +77,7 @@ async function exportData() {
   ])
   const payload = {
     app: 'qpersona',
-    version: '0.10.0',
+    version: '0.11.0',
     exportedAt: new Date().toISOString(),
     characters,
     conversations,
@@ -369,7 +369,7 @@ function goBack() {
       <div class="sheet-block">
         <div class="cell" style="cursor: default">
           <div class="cell__body"><div class="cell__title">Q伴 / QPersona</div><div class="cell__desc">开源非商业 · 学习与演示用途</div></div>
-          <span class="cell__value">0.10.0</span>
+          <span class="cell__value">0.11.0</span>
         </div>
       </div>
 

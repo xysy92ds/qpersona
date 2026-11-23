@@ -159,6 +159,8 @@ export interface BuildArgs {
   memoryText?: string
   /** 主模型本身支持图片输入时，直接把图片作为多模态内容发过去 */
   vision?: boolean
+  /** 语音通话场景：更短、更口语，不许换行和表情 */
+  call?: boolean
   stickers?: { name: string; annotation?: string }[]
 }
 
@@ -167,8 +169,12 @@ export interface BuildArgs {
  * 两套 profile 不混在同一个 system prompt 里，由这里二选一。
  */
 export function buildChatMessages(args: BuildArgs): ChatMsg[] {
-  const { character, profile, history, userName, memoryText, vision, stickers } = args
-  const system = buildSystemPrompt(character, profile, userName, memoryText, stickers)
+  const { character, profile, history, userName, memoryText, vision, stickers, call } = args
+  let system = buildSystemPrompt(character, profile, userName, memoryText, stickers)
+  if (call && profile === 'qq') {
+    system += `\n\n# 语音通话
+现在是在打电话，不是打字。回复 1~2 句口语，短一点；不要表情包、不要换行、不要动作描写、不要 Markdown。`
+  }
   const turns = history
     .filter(
       (m) =>

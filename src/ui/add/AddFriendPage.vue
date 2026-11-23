@@ -158,13 +158,13 @@ function goBack() {
           <ChevronForward class="chev" />
         </button>
 
-        <button class="option" @click="showToast('聊天记录培养 · 下一步就做')">
+        <button class="option" @click="router.push('/distill')">
           <div class="option__icon" style="background: linear-gradient(135deg,#a78bfa,#7c3aed)">
             <SparklesOutline />
           </div>
           <div class="option__body">
-            <div class="option__title">用聊天记录培养 <span class="soon">即将推出</span></div>
-            <div class="option__desc">上传 QQ 导出的 .txt，统计语感再生成角色卡</div>
+            <div class="option__title">用聊天记录培养</div>
+            <div class="option__desc">上传 txt 或截图，统计语感，两轮反馈后生成角色卡</div>
           </div>
           <ChevronForward class="chev" />
         </button>

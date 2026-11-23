@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import StatusBar from '@/ui/common/StatusBar.vue'
 import BottomNav from '@/ui/shell/BottomNav.vue'
 import SideDrawer from '@/ui/shell/SideDrawer.vue'
+import CallHost from '@/ui/chat/CallHost.vue'
 import ToastHost from '@/ui/common/ToastHost.vue'
 
 const route = useRoute()
@@ -20,6 +21,7 @@ const hideNav = computed(() => !['messages', 'contacts', 'tavern'].includes(Stri
     </div>
     <BottomNav v-if="!hideNav" />
     <SideDrawer />
+    <CallHost />
     <ToastHost />
   </div>
 </template>
