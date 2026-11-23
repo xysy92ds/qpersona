@@ -115,7 +115,7 @@ onMounted(async () => {
         <button class="cell" @click="about = true">
           <div class="cell-icon" style="background: #94a3b8"><InformationCircleOutline /></div>
           <div class="cell__body"><div class="cell__title">关于 Q伴</div></div>
-          <span class="cell__value">0.13.1</span>
+          <span class="cell__value">0.14.0</span>
           <ChevronForward class="chev" />
         </button>
       </div>
@@ -126,7 +126,7 @@ onMounted(async () => {
     <BottomSheet v-model="about" title="关于 Q伴">
       <div class="about">
         <div class="about__logo">Q</div>
-        <div class="about__name">Q伴 / QPersona 0.13.1</div>
+        <div class="about__name">Q伴 / QPersona 0.14.0</div>
         <p>
           看起来是 QQ，用起来也是 QQ —— 但好友全都是 AI 角色。<br />
           以 QQ 为交互外壳、以酒馆角色卡为人格内核，数据全部保存在这台设备上。

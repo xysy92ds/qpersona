@@ -29,6 +29,7 @@ import {
 import { useContactsStore } from '@/store/contacts'
 import { useChatStore } from '@/store/chat'
 import { db } from '@/core/db'
+import BottomSheet from '@/ui/common/BottomSheet.vue'
 import { showToast } from '@/ui/common/toast'
 import { imageToDataUrl } from '@/core/util'
 
@@ -44,6 +45,8 @@ const importInput = ref<HTMLInputElement>()
 const storageText = ref('计算中…')
 const chatBgInput = ref<HTMLInputElement>()
 const themeInput = ref<HTMLInputElement>()
+const exportOpen = ref(false)
+const includeKeys = ref(false)
 
 const themes: { value: ThemeMode; label: string }[] = [
   { value: 'light', label: '浅色' },
@@ -156,6 +159,7 @@ async function pickChatBg(e: Event) {
 }
 
 async function exportData() {
+  exportOpen.value = false
   const [characters, conversations, messages, memories, stickers] = await Promise.all([
     db.characters.toArray(),
     db.conversations.toArray(),
@@ -165,14 +169,20 @@ async function exportData() {
   ])
   const payload = {
     app: 'qpersona',
-    version: '0.11.0',
+    version: '0.14.0',
     exportedAt: new Date().toISOString(),
     characters,
     conversations,
     messages,
     memories,
     stickers,
-    settings: { ...settings.snapshot(), profiles: settings.profiles.map((p) => ({ ...p, apiKey: '' })) },
+    settings: {
+      ...settings.snapshot(),
+      profiles: settings.profiles.map((p) => ({
+        ...p,
+        apiKey: includeKeys.value ? p.apiKey : '',
+      })),
+    },
   }
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
@@ -181,7 +191,7 @@ async function exportData() {
   a.download = `qpersona-backup-${new Date().toISOString().slice(0, 10)}.json`
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 4000)
-  showToast('已导出对话与角色（不含 API Key）')
+  showToast(includeKeys.value ? '已导出完整备份（包含 API Key，别发给别人）' : '已导出备份（不含 API Key，其余设置和背景都在）', 3200)
 }
 
 function pickImport() {
@@ -553,15 +563,15 @@ function goBack() {
             <div class="cell__title" :style="confirmImport ? 'color: var(--danger)' : ''">
               {{ confirmImport ? '再点一次，选择备份文件' : '导入数据' }}
             </div>
-            <div class="cell__desc">从导出的 JSON 恢复，会覆盖当前数据</div>
+            <div class="cell__desc">从导出的 JSON 恢复，会覆盖当前数据、设置和背景</div>
           </div>
           <ChevronForward class="chev" />
         </button>
-        <button class="cell" @click="exportData">
+        <button class="cell" @click="exportOpen = true">
           <div class="cell-icon" style="background: #10b981"><CloudDownloadOutline /></div>
           <div class="cell__body">
             <div class="cell__title">导出数据</div>
-            <div class="cell__desc">角色、会话、消息、记忆、表情包打包成 JSON</div>
+            <div class="cell__desc">角色、聊天、记忆、表情包、设置、背景和头像</div>
           </div>
           <ChevronForward class="chev" />
         </button>
@@ -589,7 +599,7 @@ function goBack() {
       <div class="sheet-block">
         <div class="cell" style="cursor: default">
           <div class="cell__body"><div class="cell__title">Q伴 / QPersona</div><div class="cell__desc">开源非商业 · 学习与演示用途</div></div>
-          <span class="cell__value">0.11.0</span>
+          <span class="cell__value">0.14.0</span>
         </div>
       </div>
 
@@ -598,6 +608,24 @@ function goBack() {
         所有「好友」均为本地 AI 角色，不连接真实 QQ 服务。
       </div>
     </div>
+
+    <BottomSheet v-model="exportOpen" title="导出备份">
+      <div class="hint" style="margin-bottom: 10px">
+        包含角色卡、聊天记录、记忆、表情包、外观设置、聊天背景、个人资料、角色头像和主页背景。
+        API Key 默认不导出，导入后重新填一次即可。
+      </div>
+      <button class="cell" @click="includeKeys = !includeKeys">
+        <div class="cell__body">
+          <div class="cell__title">包含 API Key</div>
+          <div class="cell__desc">仅用于自己换机备份；带 Key 的文件等于账号钥匙</div>
+        </div>
+        <span class="switch" :class="{ on: includeKeys }" />
+      </button>
+      <template #footer>
+        <button class="btn btn--ghost" @click="exportOpen = false">取消</button>
+        <button class="btn" @click="exportData">导出</button>
+      </template>
+    </BottomSheet>
 
     <input ref="importInput" type="file" accept="application/json,.json" hidden @change="importData" />
     <input ref="chatBgInput" type="file" accept="image/*" hidden @change="pickChatBg" />

@@ -63,6 +63,7 @@ interface PersistedSettings {
   chat: ChatPrefs
   memoryPlan: MemoryPlan
   proactive: ProactivePlan
+  plazaUrl: string
   user: AppUser
 }
 
@@ -75,6 +76,7 @@ const DEFAULTS: PersistedSettings = {
   chat: { autoSplit: true, showTime: true, showUsage: true },
   memoryPlan: { mode: 'messages', every: 40, minutes: 120 },
   proactive: { enabled: false, probability: 30, minutes: 60, quietEnabled: true, quietStart: 23, quietEnd: 8 },
+  plazaUrl: '',
   user: DEFAULT_USER,
 }
 
@@ -120,6 +122,7 @@ export const useSettingsStore = defineStore('settings', {
       this.chat = { ...DEFAULTS.chat, ...(saved.chat ?? {}) }
       this.memoryPlan = { ...DEFAULTS.memoryPlan, ...(saved.memoryPlan ?? {}) }
       this.proactive = { ...DEFAULTS.proactive, ...(saved.proactive ?? {}) }
+      this.plazaUrl = saved.plazaUrl ?? ''
       this.user = { ...DEFAULT_USER, ...(saved.user ?? {}) }
       this.loaded = true
 
@@ -149,6 +152,7 @@ export const useSettingsStore = defineStore('settings', {
         chat: { ...this.chat },
         memoryPlan: { ...this.memoryPlan },
         proactive: { ...this.proactive },
+        plazaUrl: this.plazaUrl,
         user: { ...this.user },
       }
     },
@@ -210,6 +214,11 @@ export const useSettingsStore = defineStore('settings', {
 
     async setProactive(patch: Partial<ProactivePlan>) {
       this.proactive = { ...this.proactive, ...patch }
+      await this.persist()
+    },
+
+    async setPlazaUrl(url: string) {
+      this.plazaUrl = url.trim()
       await this.persist()
     },
 
