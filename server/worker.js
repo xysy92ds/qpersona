@@ -5,6 +5,7 @@
 const KINDS = new Set(['characters', 'conversations', 'messages', 'memories', 'stickers', 'settings'])
 const ALLOWED_ORIGINS = new Set([
   'https://xysy92ds.github.io',
+  'https://jianyie.pages.dev',
   'http://127.0.0.1:5173',
   'http://localhost:5173',
   'https://localhost',
