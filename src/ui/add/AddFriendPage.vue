@@ -50,6 +50,7 @@ const plazaSettings = ref(false)
 const plazaShare = ref(false)
 const uploadOpen = ref(false)
 const uploadBusy = ref(false)
+const uploadBusyId = ref<string | null>(null)
 const mineOpen = ref(false)
 const mineBusy = ref(false)
 const plazaUrlDraft = ref(settings.plazaUrl)
@@ -201,7 +202,8 @@ async function removeMine(id: string) {
 }
 
 async function uploadCharacter(c: Character) {
-  if (uploadBusy.value) return
+  if (uploadBusyId.value) return
+  uploadBusyId.value = c.id
   uploadBusy.value = true
   try {
     await plaza.uploadCharacter(c)
@@ -211,6 +213,7 @@ async function uploadCharacter(c: Character) {
     showToast(e instanceof Error ? e.message : '上传失败', 3500)
   } finally {
     uploadBusy.value = false
+    uploadBusyId.value = null
   }
 }
 
@@ -431,7 +434,7 @@ function goBack() {
           <b>{{ c.card.name }}</b>
           <small>{{ c.card.description || c.card.personality || '本地角色' }}</small>
         </span>
-        <span class="upload-row__go">{{ uploadBusy ? '处理中' : '上传' }}</span>
+        <span class="upload-row__go">{{ uploadBusyId === c.id ? '上传中' : '上传' }}</span>
       </button>
       <div v-if="!contacts.characters.length" class="hint" style="text-align:center">还没有本地角色。</div>
       <template #footer>

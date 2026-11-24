@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { resizeDataUrl } from '@/core/util'
 import { useContactsStore } from './contacts'
 import { useCloudStore } from './cloud'
 import { useSettingsStore } from './settings'
@@ -78,7 +79,31 @@ export const usePlazaStore = defineStore('plaza', {
       const settings = useSettingsStore()
       const cloud = useCloudStore()
       if (!cloud.loggedIn) throw new Error('登录后才能上传')
-      await uploadCloudPlaza(settings.cloudUrl, cloud.token, ch.card, ch.ext.qq, ch.ext.qq.avatar)
+
+      // 头像/背景是本地 dataURL，原样上传很容易超过 D1/Worker 的请求上限。
+      // 广场只需要一个小头像和展示字段，背景/原图不上传。
+      let avatar = ch.ext.qq.avatar || ''
+      if (avatar.startsWith('data:image/')) {
+        try {
+          avatar = await resizeDataUrl(avatar, 224, 0.8)
+        } catch {
+          avatar = ''
+        }
+      }
+      const qq = {
+        qqNumber: ch.ext.qq.qqNumber,
+        nickname: ch.ext.qq.nickname,
+        signature: ch.ext.qq.signature,
+        interests: ch.ext.qq.interests,
+        aliases: ch.ext.qq.aliases,
+      }
+      const extensions = { ...(ch.card.extensions || {}) }
+      delete (extensions as any).qpersona
+      const card = { ...ch.card, extensions }
+      if (JSON.stringify({ card, qq, avatar }).length > 850_000) {
+        throw new Error('这张卡的设定文字太大，先精简角色卡再上传')
+      }
+      await uploadCloudPlaza(settings.cloudUrl, cloud.token, card, qq, avatar)
       this.mode = 'cloud'
       this.loaded = false
       await this.load(true)
