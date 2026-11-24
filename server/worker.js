@@ -146,14 +146,15 @@ async function push(req, env, user) {
   const now = Date.now()
   const stmts = []
   let accepted = 0
+  let skipped = 0
   for (const raw of items) {
     if (!raw || typeof raw !== 'object') continue
     const kind = String(raw.kind || '')
     const id = String(raw.id || '')
-    if (!KINDS.has(kind) || !id || id.length > 120) continue
+    if (!KINDS.has(kind) || !id || id.length > 120) { skipped++; continue }
     const updatedAt = Math.max(0, Number(raw.updatedAt) || 0)
     const payload = JSON.stringify(raw.payload ?? null)
-    if (payload.length > 900_000) continue
+    if (payload.length > 900_000) { skipped++; continue }
     const deleted = raw.deleted ? 1 : 0
     stmts.push(env.DB.prepare(
       'INSERT INTO sync_items (user_id, kind, item_id, updated_at, deleted, payload) VALUES (?, ?, ?, ?, ?, ?) ' +
@@ -164,7 +165,7 @@ async function push(req, env, user) {
   }
   for (let i = 0; i < stmts.length; i += 80) await env.DB.batch(stmts.slice(i, i + 80))
   await env.DB.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').bind(now, user.id).run()
-  return json(req, { ok: true, accepted, now })
+  return json(req, { ok: true, accepted, skipped, now })
 }
 
 async function pull(req, env, user) {

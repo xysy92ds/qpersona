@@ -1,4 +1,5 @@
 import { db } from './db'
+import { resizeDataUrl } from './util'
 import { useSettingsStore } from '@/store/settings'
 import type { Character, Conversation, Memory, Message, Sticker } from './types'
 
@@ -86,17 +87,19 @@ export async function cloudPush(base: string, token: string, items: SyncItem[]) 
   const chunks: SyncItem[][] = []
   for (let i = 0; i < items.length; i += 500) chunks.push(items.slice(i, i + 500))
   let accepted = 0
+  let skipped = 0
   let now = Date.now()
   for (const chunk of chunks) {
-    const res = await api<{ accepted: number; now: number }>(base, '/api/sync/push', {
+    const res = await api<{ accepted: number; skipped?: number; now: number }>(base, '/api/sync/push', {
       method: 'POST',
       token,
       body: { items: chunk },
     })
     accepted += res.accepted
+    skipped += res.skipped || 0
     now = res.now
   }
-  return { accepted, now }
+  return { accepted, skipped, now }
 }
 
 function stampOf(kind: SyncKind, row: any): number {
@@ -109,6 +112,22 @@ function stampOf(kind: SyncKind, row: any): number {
   if (kind === 'stickers') return Number(row.createdAt || 0)
   if (kind === 'settings') return Number(row.localUpdatedAt || 0)
   return 0
+}
+
+async function compactImage(url: string | undefined, max: number, quality: number): Promise<string> {
+  if (!url || !url.startsWith('data:image/')) return url || ''
+  try {
+    return await resizeDataUrl(url, max, quality)
+  } catch {
+    return ''
+  }
+}
+
+async function compactCharacter(ch: Character): Promise<Character> {
+  const copy = toPlain(ch)
+  copy.ext.qq.avatar = await compactImage(copy.ext.qq.avatar, 256, 0.82)
+  copy.ext.qq.background = await compactImage(copy.ext.qq.background, 720, 0.72)
+  return copy
 }
 
 export async function collectLocalItems(): Promise<SyncItem[]> {
@@ -126,7 +145,8 @@ export async function collectLocalItems(): Promise<SyncItem[]> {
       items.push({ kind, id: String(row.id), updatedAt: stampOf(kind, row), payload: toPlain(row) })
     }
   }
-  add('characters', characters)
+  const compacted = await Promise.all(characters.map(compactCharacter))
+  add('characters', compacted)
   const humanIds = new Set(characters.filter((c) => c.ext?.human).map((c) => c.id))
   const humanConvIds = new Set(conversations.filter((c) => c.characterId && humanIds.has(c.characterId)).map((c) => c.id))
   add('conversations', conversations.filter((c) => !humanConvIds.has(c.id)))
@@ -134,6 +154,9 @@ export async function collectLocalItems(): Promise<SyncItem[]> {
   add('memories', memories)
   add('stickers', stickers)
   const settings = useSettingsStore()
+  const cloudUser = { ...settings.user }
+  cloudUser.avatar = await compactImage(cloudUser.avatar, 256, 0.82)
+  cloudUser.background = await compactImage(cloudUser.background, 720, 0.72)
   items.push({
     kind: 'settings',
     id: 'settings',
@@ -147,7 +170,9 @@ export async function collectLocalItems(): Promise<SyncItem[]> {
       proactive: settings.proactive,
       plazaUrl: settings.plazaUrl,
       cloudUrl: settings.cloudUrl,
-      user: settings.user,
+      profiles: settings.profiles.map(({ apiKey, ...rest }) => rest),
+      bindings: settings.bindings,
+      user: cloudUser,
       localUpdatedAt: settings.localUpdatedAt,
     },
   })

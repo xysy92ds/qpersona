@@ -96,7 +96,7 @@ export const useCloudStore = defineStore('cloud', {
         this.lastSync = pushed.now
         localStorage.setItem(SINCE_KEY, String(pushed.now))
         await contacts.load()
-        this.lastResult = `拉取 ${applied} 条，上传 ${pushed.accepted} 条`
+        this.lastResult = `拉取 ${applied} 条，上传 ${pushed.accepted} 条${pushed.skipped ? `，${pushed.skipped} 条过大未上传` : ''}`
       } catch (e) {
         this.error = e instanceof Error ? e.message : '同步失败'
       } finally {

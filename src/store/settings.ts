@@ -182,6 +182,32 @@ export const useSettingsStore = defineStore('settings', {
       if (typeof data.plazaUrl === 'string') this.plazaUrl = data.plazaUrl
       if (typeof data.cloudUrl === 'string') this.cloudUrl = data.cloudUrl
       if (data.user) this.user = { ...this.user, ...data.user }
+      if (Array.isArray(data.profiles)) {
+        const localById = new Map(this.profiles.map((p) => [p.id, p]))
+        const merged: ApiProfile[] = []
+        for (const raw of data.profiles) {
+          if (!raw || typeof raw !== 'object') continue
+          const id = String(raw.id || '')
+          if (!id) continue
+          const local = localById.get(id)
+          merged.push({
+            ...raw,
+            id,
+            apiKey: local?.apiKey || '',
+          } as ApiProfile)
+        }
+        const cloudIds = new Set(merged.map((p) => p.id))
+        for (const local of this.profiles) if (!cloudIds.has(local.id)) merged.push(local)
+        this.profiles = merged
+      }
+      if (data.bindings && typeof data.bindings === 'object') {
+        const valid = new Set(this.profiles.map((p) => p.id))
+        const next: Partial<Record<SlotId, string>> = {}
+        for (const [k, v] of Object.entries(data.bindings)) {
+          if (typeof v === 'string' && valid.has(v)) next[k as SlotId] = v
+        }
+        this.bindings = next
+      }
       this.localUpdatedAt = Number(data.localUpdatedAt) || Date.now()
       this.applyAppearance()
       await this.persist(false)
