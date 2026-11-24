@@ -38,4 +38,4 @@ APK 路径：`android/app/build/outputs/apk/debug/app-debug.apk`。
 - 麦克风、相册、文件的权限在首次使用时弹窗；
 - 数据仍存在 WebView 的 IndexedDB 里；卸载 App 会丢，换机用「导出数据」；
 - 修改网页后要重新 `pnpm build && cap sync android`，再重新打包；
-- 图标和启动图目前是 Capacitor 默认，后面换成「笺页」自己的。
+- 图标和开屏图已经换成「笺页」原创素材；改图后重新 build/sync 即可。
