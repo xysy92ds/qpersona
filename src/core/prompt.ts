@@ -1,4 +1,5 @@
 import type { Character, ContextProfileId, Message } from './types'
+import { groupLine } from './group'
 import type { ChatMsg } from './llm'
 
 export function resolveMacros(text: string, character: Character, userName: string): string {
@@ -226,6 +227,8 @@ export interface GroupBuildArgs {
   userName: string
   groupName: string
   memoryText?: string
+  /** 最后一条消息是不是发给这个角色的 */
+  addressedLast?: boolean
 }
 
 /**
@@ -251,6 +254,9 @@ export function buildGroupMessages(args: GroupBuildArgs): ChatMsg[] {
 - 不写旁白、动作、神态、括号、星号、Markdown、小标题。
 - 不用「作为一个 AI」「我理解你的感受」「希望有帮助」这类腔调；不要每句都反问。
 - 你只知道自己看到的消息，不替别人编经历，也不读心。
+- 每条消息前面标了「发送者 → 收件人」。先判断最后一条是不是对你说的，再决定要不要接。
+- 你可以自由阅读本轮里所有人说的话来理解上下文；但不要抢别人对别人说的话。
+- 如果最后一条不是发给你的，你也没什么想接的，只输出「[跳过]」，不要硬回。
 
 # 人物
 姓名：${c.card.name}
@@ -272,17 +278,13 @@ ${example ? `\n# 说话的参考（学语气，不要照抄）\n${example}\n` : 
           m.kind === 'video' ||
           m.kind === 'voice'),
     )
-    .slice(-30)
-    .map((m) => {
-      const who = m.role === 'user' ? userName : names[m.characterId ?? ''] || c.card.name
-      return `${who}：${historyText(m)}`
-    })
+    .map((m) => groupLine(m, members, names, userName, historyText(m)))
 
   return [
     { role: 'system', content: system },
     {
       role: 'user',
-      content: `【最近的群聊】\n${lines.join('\n')}\n\n（你是${c.card.name}，现在接着聊。只输出你要发的内容，不要写自己的名字，不要复述别人。）`,
+      content: `【本轮群聊】\n${lines.join('\n')}\n\n（你是${c.card.name}。最后一条${args.addressedLast ? '是发给你的' : '不是发给你的'}。想接就按人物语气回；不想接只输出「[跳过]」。只输出你要发的内容，不要写自己的名字，不要复述别人。）`,
     },
   ]
 }

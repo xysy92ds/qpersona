@@ -15,7 +15,7 @@ import type {
 } from '@/core/types'
 import type { ChatMsg, Usage } from '@/core/llm'
 import { buildChatMessages, buildGroupMessages } from '@/core/prompt'
-import { pickSpeakers } from '@/core/group'
+import { addresseeNames, parseGroupTargets, pickSpeakers } from '@/core/group'
 import { describeImage, streamChat } from '@/core/llm'
 import { uid, sleep } from '@/core/util'
 import { costOf, estimateTokens, resolvePrice } from '@/core/pricing'
@@ -304,8 +304,12 @@ export const useChatStore = defineStore('chat', {
       const COOLDOWN_MS = 1500
       const activeMap: Record<string, number> = { ...(conv.groupActive ?? {}) }
       const spokeMap: Record<string, number> = { ...(conv.groupLastSpoke ?? {}) }
+      const wakeMap: Record<string, number> = { ...(conv.groupWakeAt ?? {}) }
       for (const [id, until] of Object.entries(activeMap)) {
-        if (until <= now) delete activeMap[id]
+        if (until <= now) {
+          delete activeMap[id]
+          delete wakeMap[id]
+        }
       }
 
       const lastUser = [...list].reverse().find((m) => m.role === 'user')
@@ -328,8 +332,11 @@ export const useChatStore = defineStore('chat', {
         threshold: 15,
       })
 
-      // 被叫到的人续命 5 分钟；即使这一轮没轮到发言
-      for (const s of triggered) activeMap[s.character.id] = now + ACTIVE_MS
+      // 被叫到的人续命 5 分钟；记下被唤醒的时间，作为「本轮」的起点
+      for (const s of triggered) {
+        if (!wakeMap[s.character.id]) wakeMap[s.character.id] = lastUser?.ts ?? now
+        activeMap[s.character.id] = now + ACTIVE_MS
+      }
 
       const chosen: Character[] = []
       const chosenIds = new Set<string>()
@@ -356,17 +363,26 @@ export const useChatStore = defineStore('chat', {
       }
 
       if (!chosen.length) {
-        await contacts.touch(convId, { groupActive: activeMap })
+        await contacts.touch(convId, { groupActive: activeMap, groupWakeAt: wakeMap })
         return
       }
 
       this.streaming[convId] = true
       try {
         for (const ch of chosen) {
-          await this.groupStream(convId, ch, members, conv)
+          if (!wakeMap[ch.id]) wakeMap[ch.id] = lastUser?.ts ?? now
+          const spoke = await this.groupStream(convId, ch, members, conv, {
+            wakeFrom: wakeMap[ch.id]!,
+            roundId: lastUser?.id,
+          })
+          if (!spoke) continue
           activeMap[ch.id] = Date.now() + ACTIVE_MS
           spokeMap[ch.id] = Date.now()
-          await contacts.touch(convId, { groupActive: activeMap, groupLastSpoke: spokeMap })
+          await contacts.touch(convId, {
+            groupActive: activeMap,
+            groupLastSpoke: spokeMap,
+            groupWakeAt: wakeMap,
+          })
           await sleep(320)
         }
       } finally {
@@ -387,7 +403,13 @@ export const useChatStore = defineStore('chat', {
       }
     },
 
-    async groupStream(convId: string, ch: Character, members: Character[], conv: Conversation) {
+    async groupStream(
+      convId: string,
+      ch: Character,
+      members: Character[],
+      conv: Conversation,
+      opts: { wakeFrom: number; roundId?: string },
+    ): Promise<boolean> {
       const contacts = useContactsStore()
       const settings = useSettingsStore()
       const memory = useMemoryStore()
@@ -399,13 +421,14 @@ export const useChatStore = defineStore('chat', {
       const profile = settings.profileFor('text_main', ch.ext.routing.text_main)
       if (!profile) {
         await this.addTip(convId, '还没有可用的文本模型，去「设置 → AI 设置」配置一下。')
-        return
+        return false
       }
 
-      const isolate = conv.groupIsolation !== false
-      const seen = conv.groupSeen?.[ch.id] ?? 0
-      let history = list.slice()
+      // 默认让角色读「被唤醒之后这一轮所有人说的话」；严格隔离只是可选。
+      const isolate = conv.groupIsolation === true
+      let history: Message[]
       if (isolate) {
+        const seen = conv.groupSeen?.[ch.id] ?? 0
         const recent = list.slice(-10)
         const fresh = list.filter((m) => m.ts > seen)
         const seenIds = new Set<number>()
@@ -416,6 +439,21 @@ export const useChatStore = defineStore('chat', {
             return true
           })
           .sort((a, b) => a.ts - b.ts)
+      } else {
+        const since = Math.min(opts.wakeFrom, Date.now())
+        const prior = list.filter((m) => m.ts < since).slice(-6)
+        const round = list.filter((m) => m.ts >= since)
+        history = [...prior, ...round]
+      }
+      // 最后一条消息是不是发给自己的：用户消息现场解析，AI 消息看它自己的 addressees
+      const last = history[history.length - 1]
+      let addressedLast = false
+      if (last) {
+        const targets =
+          last.role === 'user'
+            ? parseGroupTargets(last.text, members, last.quote).addressees
+            : last.addressees ?? []
+        addressedLast = !targets.length || targets.includes(ch.id) || targets.includes('all')
       }
       const query = history
         .filter((m) => m.role === 'user')
@@ -451,6 +489,7 @@ export const useChatStore = defineStore('chat', {
         userName: settings.user.nickname,
         groupName: conv.title,
         memoryText,
+        addressedLast,
       })
 
       const ac = new AbortController()
@@ -480,10 +519,20 @@ export const useChatStore = defineStore('chat', {
           if (i >= 0) list.splice(i, 1)
           await db.messages.delete(reply.id)
           controllers.delete(convId)
-          return
+          return false
         }
       } finally {
         controllers.delete(convId)
+      }
+
+      // 不是自己该接的话可以明确跳过
+      if (/^\s*\[?\s*(跳过|skip)\s*\]?\s*$/i.test(reply.text)) {
+        reply.status = 'ok'
+        reply.text = ''
+        const i = list.indexOf(reply)
+        if (i >= 0) list.splice(i, 1)
+        await db.messages.delete(reply.id)
+        return false
       }
 
       const promptEst = messages.reduce((n, m) => n + estimateTokens(contentText(m.content)), 0)
@@ -505,6 +554,12 @@ export const useChatStore = defineStore('chat', {
         reply.text = '（这句没生成出来）'
       }
 
+      const replyTargets = parseGroupTargets(reply.text, members)
+      reply.mentions = replyTargets.mentions
+      reply.addressees = replyTargets.addressees
+      reply.roundId = opts.roundId
+      reply.replyToId = opts.roundId
+
       // 群聊也允许一次发两三条，别一句就没了
       let preview = reply.text
       if (reply.status === 'ok') {
@@ -523,6 +578,10 @@ export const useChatStore = defineStore('chat', {
               ts: nextTs(list),
               status: 'ok',
               kind: 'text',
+              mentions: reply.mentions,
+              addressees: reply.addressees,
+              roundId: opts.roundId,
+              replyToId: opts.roundId,
             })
             await this.pushLocal(convId, extra)
             extras.push(extra)
@@ -547,7 +606,9 @@ export const useChatStore = defineStore('chat', {
         lastText: `${displayName}：${preview.slice(0, 60)}`,
         lastTs: Date.now(),
         groupSeen: { ...(latest?.groupSeen ?? {}), [ch.id]: Date.now() },
+        groupWakeAt: { ...(latest?.groupWakeAt ?? {}), [ch.id]: opts.wakeFrom },
       })
+      return true
     },
 
     /** 真正调用模型、流式写回回复的那一段 */
@@ -665,6 +726,16 @@ export const useChatStore = defineStore('chat', {
       }
 
       // 这一轮的 token 用量：优先用接口回传的，没有就按字数估
+      // 不是自己该接的话可以明确跳过
+      if (/^\s*\[?\s*(跳过|skip)\s*\]?\s*$/i.test(reply.text)) {
+        reply.status = 'ok'
+        reply.text = ''
+        const i = list.indexOf(reply)
+        if (i >= 0) list.splice(i, 1)
+        await db.messages.delete(reply.id)
+        return false
+      }
+
       const promptEst = messages.reduce((n, m) => n + estimateTokens(contentText(m.content)), 0)
       const completionEst = estimateTokens(reply.text)
       const u = apiUsage as Usage | null

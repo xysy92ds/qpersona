@@ -31,7 +31,7 @@ const avatar = ref(conv.value?.avatar ?? '')
 const activeMinutes = ref(conv.value?.groupActiveMinutes ?? 5)
 const memberIds = ref<string[]>([...(conv.value?.memberIds ?? [])])
 const memoryShare = ref(conv.value?.groupMemoryShare !== false)
-const isolation = ref(conv.value?.groupIsolation !== false)
+const isolation = ref(conv.value?.groupIsolation === true)
 const muted = ref<Record<string, boolean>>({ ...(conv.value?.groupMuted ?? {}) })
 const avatarInput = ref<HTMLInputElement>()
 const addOpen = ref(false)
@@ -154,7 +154,7 @@ function goBack() {
           <div class="cell__body">
             <div class="cell__title">严格上下文隔离</div>
             <div class="cell__desc">
-              打开后，每个成员主要看自己上次发言之后的群消息 + 最近 10 条，省 token 也更像真人。
+              默认关闭：每个角色能读自己这轮被唤醒后所有人说的话。打开后只读自己上次发言之后 + 最近 10 条，省 token，但可能接不上前文。
             </div>
           </div>
           <span class="switch" :class="{ on: isolation }" />

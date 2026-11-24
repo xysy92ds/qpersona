@@ -154,6 +154,8 @@ export interface Conversation {
   groupActive?: Record<string, number>
   /** 群聊最近发言时间：characterId -> 时间戳 */
   groupLastSpoke?: Record<string, number>
+  /** 群聊每个成员被唤醒的时间：characterId -> 时间戳 */
+  groupWakeAt?: Record<string, number>
   /** 被叫醒后保持活跃的分钟数，默认 5 */
   groupActiveMinutes?: number
   /** 群成员免打扰：charId -> true */
@@ -250,6 +252,14 @@ export interface Message {
   voice?: VoicePayload
   /** 引用某条消息 */
   quote?: QuotePayload
+  /** 群聊里显式 @ 到的角色 ID */
+  mentions?: string[]
+  /** 群聊里这条消息的收件人角色 ID；'all' 表示全体 */
+  addressees?: string[]
+  /** 群聊里这条回复所属的一轮（触发它的用户消息 ID） */
+  roundId?: string
+  /** 群聊里这条回复针对的消息 ID */
+  replyToId?: string
   error?: string
   /** 这一次回复的 token 用量（assistant 消息才有） */
   usage?: { prompt: number; completion: number; total: number }

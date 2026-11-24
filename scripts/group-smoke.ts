@@ -1,9 +1,10 @@
 /**
- * 群聊激活规则测试：纯函数，零模型。
+ * 群聊激活与收件人解析测试：纯函数，零模型。
  *   pnpm test:smoke
  */
-import { pickSpeakers } from '../src/core/group'
-import type { Character } from '../src/core/types'
+import { parseGroupTargets, pickSpeakers } from '../src/core/group'
+import { buildGroupMessages } from '../src/core/prompt'
+import type { Character, Message } from '../src/core/types'
 
 const mk = (id: string, name: string, nickname: string, interests: string[], aliases: string[] = []): Character => ({
   id,
@@ -50,3 +51,31 @@ console.log('5) max speakers <= 2:', both.length <= 2, '| picked:', both.map((s)
 
 const cooled = pickSpeakers([lin, zhou], '@知夏 在吗', { lastSpeakerId: 'c1', max: 2 })
 console.log('6) @ beats cooldown:', cooled[0]?.character.id === 'c1')
+
+const t1 = parseGroupTargets('知夏在吗', [lin, zhou])
+console.log('7) plain name target:', t1.addressees.includes('c1') && !t1.addressees.includes('c2'))
+
+const t2 = parseGroupTargets('@阿屿 你来一下', [lin, zhou])
+console.log('8) @ target:', t2.addressees.includes('c2') && !t2.addressees.includes('c1'))
+
+const t3 = parseGroupTargets('你们都在吗', [lin, zhou])
+console.log('9) broadcast:', t3.addressees.length === 0 && !t3.explicit)
+
+
+const history: Message[] = [
+  { id: 'm1', conversationId: 'g', role: 'user', text: '知夏在吗', ts: 1, status: 'ok', kind: 'text' },
+  { id: 'm2', conversationId: 'g', role: 'assistant', characterId: 'c1', text: '在', ts: 2, status: 'ok', kind: 'text', addressees: [] },
+]
+const built = buildGroupMessages({
+  character: lin,
+  members: [lin, zhou],
+  names: { c1: '知夏', c2: '阿屿' },
+  history,
+  userName: '你',
+  groupName: '测试群',
+  addressedLast: false,
+})
+const system = String(built[0]!.content)
+const user = String(built[1]!.content)
+console.log('10) prompt has arrows:', user.includes('你 → 知夏'), '| has round context:', user.includes('本轮群聊'))
+console.log('11) skip instruction:', system.includes('[跳过]'), '| addressee note:', system.includes('→ 收件人'))

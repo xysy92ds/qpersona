@@ -1,4 +1,4 @@
-import type { Character } from './types'
+import type { Character, Message, QuotePayload } from './types'
 
 export interface GroupScore {
   character: Character
@@ -62,6 +62,81 @@ export function scoreCharacter(
 
   score += opts.jitter ?? 0
   return { character: ch, score, reasons }
+}
+
+export interface GroupTargets {
+  /** 被 @ 的角色 ID */
+  mentions: string[]
+  /** 收件人角色 ID；空数组表示全体 */
+  addressees: string[]
+  /** 是否显式点名（@ 或文本里叫了名字） */
+  explicit: boolean
+}
+
+function namesOf(ch: Character): string[] {
+  return [ch.card.name, ch.ext.qq.nickname, ...(ch.ext.qq.aliases ?? [])]
+    .filter(Boolean)
+    .map((s) => s!.toLowerCase())
+}
+
+/** 从一条消息里解析 @、引用和文本点名，算出收件人。零模型调用。 */
+export function parseGroupTargets(
+  text: string,
+  members: Character[],
+  quote?: QuotePayload,
+): GroupTargets {
+  const mentions: string[] = []
+  const named: string[] = []
+  const lower = text.toLowerCase()
+  for (const ch of members) {
+    const names = namesOf(ch)
+    if (names.some((n) => lower.includes(`@${n}`))) mentions.push(ch.id)
+    else if (names.some((n) => n && lower.includes(n))) named.push(ch.id)
+  }
+  // 引用：优先找被引用消息的发送者；QuotePayload 没有 characterId 时看名字
+  const quoted: string[] = []
+  if (quote?.name) {
+    const qn = quote.name.toLowerCase()
+    for (const ch of members) {
+      if (namesOf(ch).some((n) => n === qn || qn.includes(n))) quoted.push(ch.id)
+    }
+  }
+  const addressees = [...new Set([...mentions, ...quoted, ...named])]
+  return {
+    mentions: [...new Set(mentions)],
+    addressees,
+    explicit: addressees.length > 0 || !!quote?.name,
+  }
+}
+
+/** 把收件人 ID 变成提示词里的名字 */
+export function addresseeNames(
+  ids: string[] | undefined,
+  members: Character[],
+  userName: string,
+): string[] {
+  if (!ids?.length) return ['全体']
+  const map = new Map(members.map((m) => [m.id, m.ext.qq.nickname || m.card.name]))
+  return ids.map((id) => (id === 'all' ? '全体' : map.get(id) || userName))
+}
+
+/** 群聊的一行上下文：谁 → 谁：内容 */
+export function groupLine(
+  m: Message,
+  members: Character[],
+  names: Record<string, string>,
+  userName: string,
+  text: string,
+): string {
+  const who = m.role === 'user' ? userName : names[m.characterId ?? ''] || '群友'
+  let targets = m.addressees
+  if (m.role === 'user') {
+    const parsed = parseGroupTargets(m.text, members, m.quote)
+    targets = parsed.addressees
+  }
+  const to = addresseeNames(targets, members, userName)
+  const quote = m.quote?.name ? `（回复 ${m.quote.name}）` : ''
+  return `${who} → ${to.join('、')}${quote}：${text}`
 }
 
 /** 一条用户消息最多叫醒几个人 */
