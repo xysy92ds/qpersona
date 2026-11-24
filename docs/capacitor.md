@@ -32,6 +32,15 @@ APK 路径：`android/app/build/outputs/apk/debug/app-debug.apk`。
 - 状态栏由应用自己绘制，Android 壳启动后会隐藏系统状态栏；
 - 录音/相机权限在首次使用时弹窗。
 
+## 固定签名
+
+`android/app/debug.p12` 是固定的 debug keystore（别名/密码 `jianyie-debug`），
+Android workflow 每次都用它签名，所以后续升级可以直接覆盖安装，不用每次卸载。
+
+- 只用于 debug；正式分发请另生成 release keystore，不要把这个密码用于上架；
+- 第一次从旧的临时签名版本换到这个 key，仍然需要卸载一次；之后不需要；
+- 如果 keystore 丢失，签名会变，又需要卸载重装。
+
 ## 注意
 
 - WebView 里访问模型接口可能遇到 CORS，和浏览器不同；需要模型服务允许 `https://localhost` 或走代理；
