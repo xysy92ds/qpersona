@@ -141,4 +141,43 @@ console.log('10) private chat recalls group memory:', privateRecall.includes('�
 const groupOnly = await memory.recall(ch.id, '雨天看展', { includePrivate: false })
 console.log('11) group-only recall drops private:', !groupOnly.includes('雨天') && groupOnly.includes('看展'))
 
+
+// —— 手动记忆：添加、去重合并、置顶、编辑、合并重复 ——
+const manual = await memory.add(ch.id, {
+  type: 'fact',
+  content: '对方养了一只橘猫',
+  importance: 5,
+  tags: ['猫'],
+})
+const dup = await memory.add(ch.id, {
+  type: 'fact',
+  content: '对方养了一只橘猫',
+  importance: 9,
+  tags: ['年糕'],
+})
+const afterAdd = await db.memories.where('characterId').equals(ch.id).toArray()
+const manualRow = afterAdd.find((m) => m.id === manual?.id)
+console.log('12) manual add dedupes:', afterAdd.filter((m) => m.content === '对方养了一只橘猫').length === 1,
+  '| importance raised:', manualRow?.importance === 9,
+  '| tags merged:', (manualRow?.tags ?? []).includes('年糕'),
+  '| same id:', dup?.id === manual?.id)
+
+await memory.update(manual!.id, { content: '对方养了一只叫年糕的橘猫', pinned: true, importance: 9 })
+const pinnedRow = (await db.memories.where('characterId').equals(ch.id).toArray()).find((m) => m.id === manual!.id)
+console.log('13) edit + pin:', pinnedRow?.content.includes('年糕') === true, '| pinned:', pinnedRow?.pinned === true)
+
+const beforeMerge = await db.memories.count()
+await db.memories.put({
+  ...pinnedRow!,
+  id: 'mem_dup_manual',
+  content: '对方养了一只叫年糕的橘猫！',
+  pinned: false,
+  importance: 4,
+})
+const removed = await memory.mergeDuplicates(ch.id)
+console.log('14) merge duplicates:', removed >= 1, '| count:', beforeMerge, '->', await db.memories.count())
+
+const catRecall = await memory.recall(ch.id, '年糕最近怎么样')
+console.log('15) pinned/manual recall:', catRecall.includes('年糕'))
+
 server.close()

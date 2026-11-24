@@ -45,6 +45,7 @@ const emit = defineEmits<{
   image: [ImagePayload]
   video: [VideoPayload]
   voice: [VoicePayload]
+  call: []
   closeQuote: []
 }>()
 
@@ -533,10 +534,9 @@ watch(text, () => nextTick(resize))
           <span class="more-item__icon" style="background: #fff4e6; color: #f59e0b"><AtOutline /></span>
           <span>提到成员</span>
         </button>
-        <button class="more-item" @click="moreOpen = false; showToast('语音通话 · Phase 4')">
+        <button class="more-item" @click="moreOpen = false; emit('call')">
           <span class="more-item__icon" style="background: #e8f8ee; color: #22c55e"><CallOutline /></span>
           <span>语音通话</span>
-          <em>即将推出</em>
         </button>
       </div>
       <div class="more-hint">双击对方头像可以拍一拍</div>

@@ -21,6 +21,13 @@ function textOf(m: Message): string {
   return m.text
 }
 
+function normalizeContent(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[\s\p{P}\p{S}]/gu, '')
+    .trim()
+}
+
 function pickJSON(raw: string): any {
   const start = raw.indexOf('{')
   const end = raw.lastIndexOf('}')
@@ -51,16 +58,115 @@ export const useMemoryStore = defineStore('memory', {
       if (!characterId) return
       if (this.loaded[characterId] && !force) return
       const rows = await db.memories.where('characterId').equals(characterId).toArray()
-      rows.sort((a, b) => b.createdAt - a.createdAt)
+      rows.sort((a, b) => {
+        if (!!b.pinned !== !!a.pinned) return b.pinned ? 1 : -1
+        return b.importance - a.importance || b.createdAt - a.createdAt
+      })
       this.byCharacter[characterId] = rows
       this.loaded[characterId] = true
     },
 
     async remove(id: string) {
+      const row = await db.memories.get(id)
       await db.memories.delete(id)
       for (const key of Object.keys(this.byCharacter)) {
         this.byCharacter[key] = this.byCharacter[key]!.filter((m) => m.id !== id)
       }
+      if (row) this.loaded[row.characterId] = false
+    },
+
+    /** 手动添加；内容相同则合并重要度/标签，不产生重复 */
+    async add(
+      characterId: string,
+      data: { type: MemoryType; content: string; importance: number; tags?: string[]; pinned?: boolean; source?: 'group' | 'private' },
+    ): Promise<Memory | null> {
+      const content = data.content.trim().slice(0, 120)
+      if (!content) return null
+      const rows = await db.memories.where('characterId').equals(characterId).toArray()
+      const norm = normalizeContent(content)
+      const dup = rows.find((m) => normalizeContent(m.content) === norm)
+      const now = Date.now()
+      if (dup) {
+        const next: Memory = {
+          ...dup,
+          importance: Math.max(dup.importance, Math.max(1, Math.min(10, data.importance))),
+          tags: [...new Set([...(dup.tags ?? []), ...(data.tags ?? [])])].slice(0, 8),
+          pinned: !!dup.pinned || !!data.pinned,
+          updatedAt: now,
+        }
+        await putMemory(next)
+        await this.load(characterId, true)
+        return next
+      }
+      const row: Memory = {
+        id: uid('mem'),
+        characterId,
+        type: data.type,
+        content,
+        importance: Math.max(1, Math.min(10, Math.round(data.importance))),
+        tags: (data.tags ?? []).slice(0, 8),
+        source: data.source,
+        pinned: !!data.pinned,
+        createdAt: now,
+        updatedAt: now,
+        lastAccessed: 0,
+      }
+      await putMemory(row)
+      await this.load(characterId, true)
+      return row
+    },
+
+    async update(id: string, patch: Partial<Pick<Memory, 'type' | 'content' | 'importance' | 'tags' | 'pinned'>>) {
+      const row = await db.memories.get(id)
+      if (!row) return
+      const next: Memory = {
+        ...row,
+        ...patch,
+        content: patch.content !== undefined ? patch.content.trim().slice(0, 120) : row.content,
+        importance: patch.importance !== undefined ? Math.max(1, Math.min(10, Math.round(patch.importance))) : row.importance,
+        tags: patch.tags ? [...new Set(patch.tags)].slice(0, 8) : row.tags,
+        updatedAt: Date.now(),
+      }
+      await putMemory(next)
+      await this.load(next.characterId, true)
+    },
+
+    async togglePin(id: string) {
+      const row = await db.memories.get(id)
+      if (!row) return
+      await this.update(id, { pinned: !row.pinned })
+    },
+
+    /** 把同一角色里内容重复的记忆合并，返回删掉的条数 */
+    async mergeDuplicates(characterId: string): Promise<number> {
+      const rows = await db.memories.where('characterId').equals(characterId).toArray()
+      const groups = new Map<string, Memory[]>()
+      for (const m of rows) {
+        const key = normalizeContent(m.content)
+        if (!key) continue
+        groups.set(key, [...(groups.get(key) ?? []), m])
+      }
+      let removed = 0
+      for (const group of groups.values()) {
+        if (group.length < 2) continue
+        group.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.importance - a.importance || a.createdAt - b.createdAt)
+        const keep = group[0]!
+        const tags = [...new Set(group.flatMap((m) => m.tags ?? []))].slice(0, 8)
+        const next: Memory = {
+          ...keep,
+          tags,
+          importance: Math.max(...group.map((m) => m.importance)),
+          pinned: group.some((m) => m.pinned),
+          updatedAt: Date.now(),
+        }
+        await putMemory(next)
+        for (const m of group.slice(1)) {
+          await db.memories.delete(m.id)
+          removed++
+        }
+      }
+      if (removed) await this.load(characterId, true)
+      return removed
     },
 
     /**
@@ -91,7 +197,7 @@ export const useMemoryStore = defineStore('memory', {
         }
         const base = m.importance * 0.35
         const typeBoost = m.type === 'instruction' ? 1.2 : m.type === 'relationship' ? 0.7 : 0
-        return { m, score: hit * 1.1 + base + typeBoost }
+        return { m, score: hit * 1.1 + base + typeBoost + (m.pinned ? 2 : 0) }
       })
 
       scored.sort((a, b) => b.score - a.score)
@@ -269,8 +375,14 @@ ${source === 'group' ? '- 这是群聊记录：只记与你（角色）和对方
           const type = VALID_TYPES.has(item?.type) ? (item.type as MemoryType) : 'fact'
           const importance = Math.max(1, Math.min(10, Number(item?.importance) || 5))
           const tags = Array.isArray(item?.tags) ? item.tags.slice(0, 4).map(String) : []
-          const dup = existing.some((m) => m.content === content)
-          if (dup) continue
+          const dup = existing.find((m) => normalizeContent(m.content) === normalizeContent(content))
+          if (dup) {
+            dup.importance = Math.max(dup.importance, importance)
+            dup.tags = [...new Set([...(dup.tags ?? []), ...tags])].slice(0, 8)
+            dup.updatedAt = Date.now()
+            await putMemory(dup)
+            continue
+          }
           const memory: Memory = {
             id: uid('mem'),
             characterId: ch.id,
@@ -281,6 +393,7 @@ ${source === 'group' ? '- 这是群聊记录：只记与你（角色）和对方
             source,
             tags,
             createdAt: Date.now(),
+            updatedAt: Date.now(),
             lastAccessed: 0,
           }
           await putMemory(memory)

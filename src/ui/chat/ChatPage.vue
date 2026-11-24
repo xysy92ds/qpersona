@@ -214,6 +214,15 @@ async function switchProfile(target: 'qq' | 'tavern') {
   router.push(`/chat/${c.id}`)
 }
 
+function openCallFromMenu() {
+  const c = conv.value
+  if (!ch.value || !c || c.kind !== 'single') {
+    showToast('群语音 · 后面做')
+    return
+  }
+  ui.openCall(c.id)
+}
+
 async function toggleProactiveMute() {
   if (!conv.value) return
   await contacts.touch(conv.value.id, { proactiveMuted: !conv.value.proactiveMuted })
@@ -397,6 +406,7 @@ async function pokeBy(name: string) {
       @image="sendImage"
       @video="sendVideo"
       @voice="sendVoice"
+      @call="openCallFromMenu"
       @close-quote="quoting = null"
     />
 

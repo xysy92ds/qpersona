@@ -295,6 +295,9 @@ export interface Memory {
   tags: string[]
   createdAt: number
   lastAccessed: number
+  /** 手动置顶：召回时优先，不参与自动衰减 */
+  pinned?: boolean
+  updatedAt?: number
 }
 
 export const MEMORY_TYPES: { id: MemoryType; label: string; color: string }[] = [

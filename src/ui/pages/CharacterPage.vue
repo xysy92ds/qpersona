@@ -278,6 +278,7 @@ function goBack() {
       <div class="group-title mem-title">
         记忆
         <span class="mem-count">{{ memoryList.length }}</span>
+        <button class="mem-refresh" @click="router.push(`/character/${ch.id}/memory`)">管理</button>
         <button class="mem-refresh" :disabled="memoryBusy" @click="summarizeMemory">
           {{ memoryBusy ? '整理中…' : '立即整理' }}
         </button>
