@@ -209,6 +209,11 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(req) })
     try {
       if (path === '/api/health') return json(req, { ok: true, service: 'jianyie-api', time: Date.now() })
+      if (path === '/api/admin/cleanup' && req.method === 'POST') {
+        if (!env.ADMIN_KEY || req.headers.get('X-Admin-Key') !== env.ADMIN_KEY) return err(req, 'forbidden', 403)
+        const cleaned = await cleanup(env)
+        return json(req, { ok: true, cleaned })
+      }
       if (path === '/api/auth/register' && req.method === 'POST') return register(req, env)
       if (path === '/api/auth/login' && req.method === 'POST') return login(req, env)
       if (path === '/api/auth/logout' && req.method === 'POST') return logout(req, env)
