@@ -187,6 +187,47 @@ function safeParse(s) {
   try { return JSON.parse(s) } catch { return null }
 }
 
+
+async function listPlaza(req, env) {
+  const url = new URL(req.url)
+  const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit')) || 100))
+  const rows = await env.DB.prepare(
+    "SELECT id, author_id, author_name, payload, created_at FROM plaza_cards WHERE status = 'approved' ORDER BY created_at DESC LIMIT ?"
+  ).bind(limit).all()
+  const items = (rows.results || []).map((r) => ({
+    id: r.id,
+    author: r.author_name || '匿名',
+    authorId: r.author_id,
+    uploadedAt: r.created_at,
+    payload: safeParse(r.payload),
+  }))
+  return json(req, { ok: true, items })
+}
+
+async function uploadPlaza(req, env, user) {
+  const body = await readJSON(req)
+  const card = body?.card
+  if (!card || typeof card !== 'object' || !String(card.name || '').trim()) return err(req, '角色卡缺少名字')
+  const payload = JSON.stringify({ card, qq: body.qq || {}, avatar: body.avatar || '' })
+  if (payload.length > 900_000) return err(req, '角色卡太大')
+  const id = crypto.randomUUID()
+  const now = Date.now()
+  await env.DB.prepare(
+    "INSERT INTO plaza_cards (id, author_id, author_name, payload, status, created_at) VALUES (?, ?, ?, ?, 'approved', ?)"
+  ).bind(id, user.id, user.username, payload, now).run()
+  return json(req, { ok: true, id })
+}
+
+async function deletePlaza(req, env, user, id) {
+  const row = await env.DB.prepare('SELECT author_id FROM plaza_cards WHERE id = ?').bind(id).first()
+  if (!row) return err(req, '卡片不存在', 404)
+  const isOwner = row.author_id === user.id
+  const isAdmin = !!env.ADMIN_KEY && req.headers.get('X-Admin-Key') === env.ADMIN_KEY
+  if (!isOwner && !isAdmin) return err(req, '只能删除自己上传的卡', 403)
+  await env.DB.prepare('DELETE FROM plaza_cards WHERE id = ?').bind(id).run()
+  return json(req, { ok: true })
+}
+
 async function cleanup(env) {
   const now = Date.now()
   const cutoff = now - INACTIVE_DAYS * 86400000
@@ -209,6 +250,16 @@ export default {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(req) })
     try {
       if (path === '/api/health') return json(req, { ok: true, service: 'jianyie-api', time: Date.now() })
+      if (path === '/api/plaza/cards' && req.method === 'GET') return listPlaza(req, env)
+      if (path === '/api/plaza/cards' && req.method === 'POST') {
+        const user = await currentUser(req, env)
+        return user ? uploadPlaza(req, env, user) : err(req, '登录后才能上传', 401)
+      }
+      if (path.startsWith('/api/plaza/cards/') && req.method === 'DELETE') {
+        const user = await currentUser(req, env)
+        if (!user) return err(req, '未登录', 401)
+        return deletePlaza(req, env, user, decodeURIComponent(path.slice('/api/plaza/cards/'.length)))
+      }
       if (path === '/api/admin/cleanup' && req.method === 'POST') {
         if (!env.ADMIN_KEY || req.headers.get('X-Admin-Key') !== env.ADMIN_KEY) return err(req, 'forbidden', 403)
         const cleaned = await cleanup(env)

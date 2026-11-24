@@ -11,6 +11,14 @@
 
 API Key 不参与同步；新设备登录后需要自己重新填模型 Key。
 
+## 动态广场
+
+- `GET /api/plaza/cards` 公开读取已通过的卡；
+- `POST /api/plaza/cards` 登录后上传（当前自动 approved）；
+- `DELETE /api/plaza/cards/:id` 作者或管理员删除；
+- 广场卡单独存，不随 30 天清理删除；
+- 前端「添加朋友 → 广场 → 云端广场」可切换并上传本地角色。
+
 ## API
 
 - `POST /api/auth/register` `{username,password}`

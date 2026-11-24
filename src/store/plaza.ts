@@ -1,10 +1,13 @@
 import { defineStore } from 'pinia'
 import { useContactsStore } from './contacts'
+import { useCloudStore } from './cloud'
 import { useSettingsStore } from './settings'
 import {
   extForPlaza,
+  fetchCloudPlaza,
   normalizePlaza,
   searchPlaza,
+  uploadCloudPlaza,
   type PlazaCard,
   type PlazaSort,
 } from '@/core/plaza'
@@ -17,6 +20,7 @@ export const usePlazaStore = defineStore('plaza', {
     loaded: false,
     error: '',
     source: '',
+    mode: 'static' as 'static' | 'cloud',
     query: '',
     tag: '',
     sort: 'hot' as PlazaSort,
@@ -36,15 +40,22 @@ export const usePlazaStore = defineStore('plaza', {
       this.loading = true
       this.error = ''
       try {
-        const configured = settings.plazaUrl.trim()
-        const url = configured
-          ? configured
-          : new URL('plaza/cards.json', document.baseURI).toString()
-        this.source = url
-        const res = await fetch(force ? `${url}${url.includes('?') ? '&' : '?'}v=${Date.now()}` : url)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
-        this.cards = normalizePlaza(data)
+        if (this.mode === 'cloud') {
+          const cloud = useCloudStore()
+          if (!cloud.loggedIn) throw new Error('登录后才能使用云端广场')
+          this.source = `${settings.cloudUrl}/api/plaza/cards`
+          this.cards = await fetchCloudPlaza(settings.cloudUrl)
+        } else {
+          const configured = settings.plazaUrl.trim()
+          const url = configured
+            ? configured
+            : new URL('plaza/cards.json', document.baseURI).toString()
+          this.source = url
+          const res = await fetch(force ? `${url}${url.includes('?') ? '&' : '?'}v=${Date.now()}` : url)
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          const data = await res.json()
+          this.cards = normalizePlaza(data)
+        }
         this.loaded = true
         if (!this.cards.length) this.error = '广场里还没有卡片'
       } catch (e) {
@@ -52,6 +63,22 @@ export const usePlazaStore = defineStore('plaza', {
       } finally {
         this.loading = false
       }
+    },
+
+    async setMode(mode: 'static' | 'cloud') {
+      this.mode = mode
+      this.loaded = false
+      await this.load(true)
+    },
+
+    async uploadCharacter(ch: Character): Promise<void> {
+      const settings = useSettingsStore()
+      const cloud = useCloudStore()
+      if (!cloud.loggedIn) throw new Error('登录后才能上传')
+      await uploadCloudPlaza(settings.cloudUrl, cloud.token, ch.card, ch.ext.qq, ch.ext.qq.avatar)
+      this.mode = 'cloud'
+      this.loaded = false
+      await this.load(true)
     },
 
     async importCard(item: PlazaCard): Promise<Character> {

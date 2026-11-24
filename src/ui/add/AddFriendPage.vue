@@ -21,14 +21,17 @@ import { parseCardFile, buildCustomCard, type ParsedCard } from '@/core/card'
 import { imageToDataUrl } from '@/core/util'
 import { useContactsStore } from '@/store/contacts'
 import { usePlazaStore } from '@/store/plaza'
+import { useCloudStore } from '@/store/cloud'
 import { useSettingsStore } from '@/store/settings'
 import { plazaTags, type PlazaCard } from '@/core/plaza'
+import type { Character } from '@/core/types'
 import { showToast } from '@/ui/common/toast'
 
 const route = useRoute()
 const router = useRouter()
 const contacts = useContactsStore()
 const plaza = usePlazaStore()
+const cloud = useCloudStore()
 const settings = useSettingsStore()
 
 const fileInput = ref<HTMLInputElement>()
@@ -43,6 +46,8 @@ const plazaPreview = ref<PlazaCard | null>(null)
 const plazaBusy = ref(false)
 const plazaSettings = ref(false)
 const plazaShare = ref(false)
+const uploadOpen = ref(false)
+const uploadBusy = ref(false)
 const plazaUrlDraft = ref(settings.plazaUrl)
 
 const tags = computed(() => plazaTags(plaza.cards).slice(0, 12))
@@ -142,6 +147,37 @@ onMounted(() => {
 function openPlaza() {
   tab.value = 'plaza'
   void plaza.load()
+}
+
+async function switchPlaza(mode: 'static' | 'cloud') {
+  try {
+    await plaza.setMode(mode)
+  } catch (e) {
+    plaza.error = e instanceof Error ? e.message : '广场加载失败'
+  }
+}
+
+function openUpload() {
+  if (!cloud.loggedIn) {
+    showToast('先登录才能上传到云端广场')
+    void router.push('/cloud')
+    return
+  }
+  uploadOpen.value = true
+}
+
+async function uploadCharacter(c: Character) {
+  if (uploadBusy.value) return
+  uploadBusy.value = true
+  try {
+    await plaza.uploadCharacter(c)
+    uploadOpen.value = false
+    showToast('已上传到云端广场')
+  } catch (e) {
+    showToast(e instanceof Error ? e.message : '上传失败', 3500)
+  } finally {
+    uploadBusy.value = false
+  }
 }
 
 async function importPlaza() {
@@ -248,11 +284,17 @@ function goBack() {
           <button aria-label="刷新" @click="plaza.load(true)"><RefreshOutline /></button>
         </div>
 
+        <div class="source-tabs">
+          <button :class="{ on: plaza.mode === 'static' }" @click="switchPlaza('static')">示例广场</button>
+          <button :class="{ on: plaza.mode === 'cloud' }" @click="switchPlaza('cloud')">云端广场</button>
+        </div>
+
         <div class="plaza-bar">
           <span>{{ plaza.visible.length }} 张卡</span>
           <div>
-            <button @click="plazaSettings = true"><SettingsOutline /> 地址</button>
-            <button @click="plazaShare = true"><ShareSocialOutline /> 上传</button>
+            <button v-if="plaza.mode === 'static'" @click="plazaSettings = true"><SettingsOutline /> 地址</button>
+            <button @click="openUpload"><ShareSocialOutline /> 上传</button>
+            <button v-if="plaza.mode === 'static'" @click="plazaShare = true">说明</button>
           </div>
         </div>
 
@@ -308,6 +350,29 @@ function goBack() {
 
     <input ref="fileInput" type="file" accept=".json,.png,application/json,image/png" hidden @change="onFile" />
     <input ref="avatarInput" type="file" accept="image/*" hidden @change="pickCreateAvatar" />
+
+    <!-- 上传到云端广场 -->
+    <BottomSheet v-model="uploadOpen" title="上传到云端广场">
+      <div class="hint" style="margin-bottom: 10px">选一个本地角色公开分享；不要上传包含隐私的角色。</div>
+      <button
+        v-for="c in contacts.characters"
+        :key="c.id"
+        class="upload-row"
+        :disabled="uploadBusy"
+        @click="uploadCharacter(c)"
+      >
+        <Avatar :name="c.card.name" :src="c.ext.qq.avatar" :size="42" />
+        <span class="upload-row__body">
+          <b>{{ c.card.name }}</b>
+          <small>{{ c.card.description || c.card.personality || '本地角色' }}</small>
+        </span>
+        <span class="upload-row__go">{{ uploadBusy ? '处理中' : '上传' }}</span>
+      </button>
+      <div v-if="!contacts.characters.length" class="hint" style="text-align:center">还没有本地角色。</div>
+      <template #footer>
+        <button class="btn btn--block" @click="uploadOpen = false">关闭</button>
+      </template>
+    </BottomSheet>
 
     <!-- 广场卡片预览 -->
     <BottomSheet v-model="plazaPreviewOpen" title="广场角色">
@@ -531,6 +596,60 @@ function goBack() {
 .plaza-search button svg {
   width: 17px;
   height: 17px;
+}
+.source-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 4px 12px 8px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--bg-hover);
+}
+.source-tabs button {
+  flex: 1;
+  padding: 6px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+.source-tabs button.on {
+  background: var(--bg-sheet);
+  color: var(--text);
+  font-weight: 600;
+}
+.upload-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.upload-row:last-of-type {
+  border-bottom: none;
+}
+.upload-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.upload-row__body b {
+  font-size: 13px;
+  font-weight: 600;
+}
+.upload-row__body small {
+  font-size: 10.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.upload-row__go {
+  font-size: 11px;
+  color: var(--brand);
 }
 .plaza-bar {
   display: flex;

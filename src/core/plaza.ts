@@ -139,3 +139,34 @@ export function searchPlaza(
     sort === 'new' ? b.uploadedAt - a.uploadedAt : b.downloads - a.downloads,
   )
 }
+
+
+export async function fetchCloudPlaza(base: string): Promise<PlazaCard[]> {
+  const res = await fetch(`${base.replace(/\/$/, '')}/api/plaza/cards?limit=100`)
+  if (!res.ok) throw new Error(`云端广场加载失败（HTTP ${res.status}）`)
+  const data = await res.json()
+  const cards = (Array.isArray(data?.items) ? data.items : []).map((item: any) => ({
+    ...(item.payload || {}),
+    id: item.id,
+    author: item.author || '匿名',
+    uploadedAt: item.uploadedAt || 0,
+    downloads: 0,
+  }))
+  return normalizePlaza({ cards })
+}
+
+export async function uploadCloudPlaza(
+  base: string,
+  token: string,
+  card: CardData,
+  qq: Partial<PersonaExt['qq']>,
+  avatar?: string,
+): Promise<void> {
+  const res = await fetch(`${base.replace(/\/$/, '')}/api/plaza/cards`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ card, qq, avatar }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || data.ok === false) throw new Error(data.error || `上传失败（HTTP ${res.status}）`)
+}
