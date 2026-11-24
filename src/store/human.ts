@@ -108,6 +108,7 @@ export const useHumanStore = defineStore('human', {
         const since = Number(localStorage.getItem(key) || 0)
         const res = await pollDirect(settings.cloudUrl, cloud.token, since)
         let added = 0
+        const convIds = new Set<string>()
         for (const item of res.items || []) {
           const mid = `dm_${item.id}`
           if (await db.messages.get(mid)) continue
@@ -128,9 +129,13 @@ export const useHumanStore = defineStore('human', {
             lastTs: item.createdAt,
             unread: viewing ? 0 : (conv.unread || 0) + 1,
           })
+          convIds.add(conv.id)
           added++
         }
         localStorage.setItem(key, String(res.now))
+        if (added) {
+          window.dispatchEvent(new CustomEvent('jianyie:dm', { detail: { conversationIds: [...convIds] } }))
+        }
         return added
       } finally {
         this.polling = false

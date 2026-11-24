@@ -91,6 +91,18 @@ export const useChatStore = defineStore('chat', {
       await this.load(convId)
     },
 
+    /** 把 DB 里新增/更新的消息合并进当前会话，不打断正在流式的回复 */
+    async syncFromDb(convId: string) {
+      const rows = await db.messages.where('conversationId').equals(convId).toArray()
+      const current = this.byConv[convId] ?? []
+      const streaming = current.filter((m) => m.status === 'streaming')
+      const dbIds = new Set(rows.map((m) => m.id))
+      const merged = [...rows, ...streaming.filter((m) => !dbIds.has(m.id))]
+      merged.sort((a, b) => a.ts - b.ts)
+      this.byConv[convId] = merged
+      this.loaded[convId] = true
+    },
+
     async pushLocal(convId: string, msg: Message) {
       ;(this.byConv[convId] ??= []).push(msg)
       await putMessage(msg)

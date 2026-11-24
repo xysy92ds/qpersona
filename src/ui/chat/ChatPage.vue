@@ -136,7 +136,7 @@ watch(
 async function enter() {
   if (!conv.value) return
   armed = false
-  await chat.load(props.id)
+  await chat.syncFromDb(props.id)
   await contacts.markRead(props.id)
   await nextTick()
   scrollBottom(true)
@@ -145,10 +145,22 @@ async function enter() {
 
 let deliveryTimer: number | null = null
 
+let syncTimer: number | null = null
+
+function onDmEvent(e: Event) {
+  const detail = (e as CustomEvent<{ conversationIds?: string[] }>).detail
+  if (detail?.conversationIds && !detail.conversationIds.includes(props.id)) return
+  void chat.syncFromDb(props.id)
+}
+
 onMounted(() => {
   void enter()
   void chat.checkDelivery(props.id)
   deliveryTimer = window.setInterval(() => void chat.checkDelivery(props.id), 15_000)
+  syncTimer = window.setInterval(() => {
+    if (document.visibilityState === 'visible') void chat.syncFromDb(props.id)
+  }, 5_000)
+  window.addEventListener('jianyie:dm', onDmEvent)
 })
 watch(
   () => props.id,
@@ -287,6 +299,8 @@ watch(
 onUnmounted(() => {
   if ('speechSynthesis' in window) speechSynthesis.cancel()
   if (deliveryTimer) window.clearInterval(deliveryTimer)
+  if (syncTimer) window.clearInterval(syncTimer)
+  window.removeEventListener('jianyie:dm', onDmEvent)
 })
 
 /* ---- 消息长按 ---- */
