@@ -6,6 +6,7 @@ import {
   ChatbubblesOutline,
   ChevronBack,
   ChevronForward,
+  CloudOutline,
   CloudUploadOutline,
   CreateOutline,
   GlobeOutline,
@@ -49,6 +50,8 @@ const plazaSettings = ref(false)
 const plazaShare = ref(false)
 const uploadOpen = ref(false)
 const uploadBusy = ref(false)
+const mineOpen = ref(false)
+const mineBusy = ref(false)
 const plazaUrlDraft = ref(settings.plazaUrl)
 
 const tags = computed(() => plazaTags(plaza.cards).slice(0, 12))
@@ -166,6 +169,35 @@ function openUpload() {
     return
   }
   uploadOpen.value = true
+}
+
+async function openMine() {
+  if (!cloud.loggedIn) {
+    showToast('先登录才能查看投稿')
+    void router.push('/cloud')
+    return
+  }
+  mineBusy.value = true
+  mineOpen.value = true
+  try {
+    await plaza.loadMine()
+  } catch (e) {
+    showToast(e instanceof Error ? e.message : '加载失败')
+  } finally {
+    mineBusy.value = false
+  }
+}
+
+async function removeMine(id: string) {
+  mineBusy.value = true
+  try {
+    await plaza.removeMine(id)
+    showToast('已删除')
+  } catch (e) {
+    showToast(e instanceof Error ? e.message : '删除失败')
+  } finally {
+    mineBusy.value = false
+  }
 }
 
 async function uploadCharacter(c: Character) {
@@ -308,6 +340,7 @@ function goBack() {
           <div>
             <button v-if="plaza.mode === 'static'" @click="plazaSettings = true"><SettingsOutline /> 地址</button>
             <button @click="openUpload"><ShareSocialOutline /> 上传</button>
+            <button v-if="plaza.mode === 'cloud'" @click="openMine"><CloudOutline /> 我的投稿</button>
             <button v-if="plaza.mode === 'static'" @click="plazaShare = true">说明</button>
           </div>
         </div>
@@ -368,6 +401,20 @@ function goBack() {
 
     <input ref="fileInput" type="file" accept=".json,.png,application/json,image/png" hidden @change="onFile" />
     <input ref="avatarInput" type="file" accept="image/*" hidden @change="pickCreateAvatar" />
+
+    <!-- 我的云端投稿 -->
+    <BottomSheet v-model="mineOpen" title="我的云端投稿">
+      <div v-if="mineBusy" class="hint">加载中…</div>
+      <div v-else-if="!plaza.myCards.length" class="hint">还没有云端投稿。</div>
+      <div v-for="item in plaza.myCards" :key="item.id" class="mine-row">
+        <div class="mine-row__body">
+          <b>{{ item.payload?.card?.name || '未命名角色' }}</b>
+          <small>{{ item.status === 'approved' ? '已公开' : item.status === 'pending' ? '待审核' : item.status }}</small>
+        </div>
+        <button class="mini" :disabled="mineBusy" @click="removeMine(item.id)">删除</button>
+      </div>
+      <template #footer><button class="btn btn--block" @click="mineOpen = false">关闭</button></template>
+    </BottomSheet>
 
     <!-- 上传到云端广场 -->
     <BottomSheet v-model="uploadOpen" title="上传到云端广场">
@@ -639,6 +686,27 @@ function goBack() {
   background: var(--bg-sheet);
   color: var(--text);
   font-weight: 600;
+}
+.mine-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.mine-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mine-row__body b {
+  font-size: 13px;
+}
+.mine-row__body small {
+  font-size: 10.5px;
+  color: var(--text-3);
 }
 .upload-row {
   display: flex;

@@ -10,6 +10,7 @@ export interface PlazaCard {
   qq: Partial<PersonaExt['qq']>
   avatar?: string
   authorId?: string
+  status?: 'approved' | 'pending' | 'rejected' | string
 }
 
 export type PlazaSort = 'hot' | 'new'
@@ -151,10 +152,27 @@ export async function fetchCloudPlaza(base: string): Promise<PlazaCard[]> {
     id: item.id,
     author: item.author || '匿名',
     authorId: item.authorId || '',
+    status: item.status || 'approved',
     uploadedAt: item.uploadedAt || 0,
     downloads: 0,
   }))
   return normalizePlaza({ cards })
+}
+
+export interface MyPlazaCard {
+  id: string
+  status: string
+  createdAt: number
+  payload: { card?: CardData; qq?: Partial<PersonaExt['qq']>; avatar?: string }
+}
+
+export async function fetchMyPlaza(base: string, token: string): Promise<MyPlazaCard[]> {
+  const res = await fetch(`${base.replace(/\/$/, '')}/api/plaza/mine`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || data.ok === false) throw new Error(data.error || `加载失败（HTTP ${res.status}）`)
+  return (data.items || []) as MyPlazaCard[]
 }
 
 export async function deleteCloudPlaza(base: string, token: string, id: string): Promise<void> {

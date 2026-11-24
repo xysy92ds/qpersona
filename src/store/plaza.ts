@@ -6,6 +6,7 @@ import {
   extForPlaza,
   deleteCloudPlaza,
   fetchCloudPlaza,
+  fetchMyPlaza,
   normalizePlaza,
   searchPlaza,
   uploadCloudPlaza,
@@ -22,6 +23,7 @@ export const usePlazaStore = defineStore('plaza', {
     error: '',
     source: '',
     mode: 'static' as 'static' | 'cloud',
+    myCards: [] as any[],
     query: '',
     tag: '',
     sort: 'hot' as PlazaSort,
@@ -79,6 +81,22 @@ export const usePlazaStore = defineStore('plaza', {
       await uploadCloudPlaza(settings.cloudUrl, cloud.token, ch.card, ch.ext.qq, ch.ext.qq.avatar)
       this.mode = 'cloud'
       this.loaded = false
+      await this.load(true)
+    },
+
+    async loadMine(): Promise<void> {
+      const cloud = useCloudStore()
+      const settings = useSettingsStore()
+      if (!cloud.loggedIn) throw new Error('登录后才能查看投稿')
+      this.myCards = await fetchMyPlaza(settings.cloudUrl, cloud.token)
+    },
+
+    async removeMine(id: string): Promise<void> {
+      const cloud = useCloudStore()
+      const settings = useSettingsStore()
+      if (!cloud.loggedIn) throw new Error('登录后才能删除')
+      await deleteCloudPlaza(settings.cloudUrl, cloud.token, id)
+      await this.loadMine()
       await this.load(true)
     },
 
