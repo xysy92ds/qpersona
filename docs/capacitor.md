@@ -26,6 +26,12 @@ APK 路径：`android/app/build/outputs/apk/debug/app-debug.apk`。
 推送到 `main` 后，Actions → Build Android APK → 下载 `jianyie-debug-apk`。
 这是 debug 包，可以直接装；上架/长期分发需要自己生成签名 keystore，不要把它提交进仓库。
 
+## 原生能力
+
+- 语音识别使用系统 `SpeechRecognizer`（不依赖 WebView 的 Web Speech API）；
+- 状态栏由应用自己绘制，Android 壳启动后会隐藏系统状态栏；
+- 录音/相机权限在首次使用时弹窗。
+
 ## 注意
 
 - WebView 里访问模型接口可能遇到 CORS，和浏览器不同；需要模型服务允许 `https://localhost` 或走代理；

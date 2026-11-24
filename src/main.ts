@@ -7,7 +7,7 @@ import { router } from './router'
 import { useSettingsStore } from './store/settings'
 import { useContactsStore } from './store/contacts'
 
-import 'fake-qq-ui/styles/fake-qq-ui.css'
+import './styles/chat-bubbles.css'
 import './styles/base.css'
 
 async function bootstrap() {

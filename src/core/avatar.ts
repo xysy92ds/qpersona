@@ -22,7 +22,7 @@ export function avatarSvg(name: string): string {
 <text x="120" y="150" font-size="102" font-weight="600" fill="#ffffff" text-anchor="middle"
  font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans SC',sans-serif">${glyph}</text>
 </svg>`
-  // fake-qq-ui 用未加引号的 CSS url() 设置头像，括号会截断 URL，必须一起转义
+  // 气泡组件用未加引号的 CSS url() 设置头像，括号会截断 URL，必须一起转义
   const encoded = encodeURIComponent(svg)
     .replace(/\(/g, '%28')
     .replace(/\)/g, '%29')
