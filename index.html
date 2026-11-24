@@ -11,7 +11,7 @@
   <body>
     <div id="app">
       <div class="boot">
-        <div class="boot__logo">Q</div>
+        <div class="boot__logo">笺</div>
         <div class="boot__name">笺页</div>
       </div>
     </div>
@@ -23,26 +23,32 @@
         align-items: center;
         justify-content: center;
         gap: 14px;
-        background: linear-gradient(180deg, #e9f0ff, #f6f8fb);
+        background: radial-gradient(120% 90% at 50% 0%, #eef5ff, #f8fafc 70%);
         font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif;
+        animation: bootIn .45s ease-out both;
       }
       .boot__logo {
         width: 74px;
         height: 74px;
         border-radius: 22px;
-        background: linear-gradient(135deg, #2ac8ff, #0b6fe0);
+        background: linear-gradient(135deg, #2f86ff, #09348c);
         color: #fff;
-        font-size: 42px;
+        font-size: 40px;
         font-weight: 700;
         display: grid;
         place-items: center;
-        box-shadow: 0 14px 30px rgba(11, 111, 224, 0.28);
+        box-shadow: 0 14px 30px rgba(11, 70, 160, 0.24);
+        animation: logoIn .55s cubic-bezier(.2,.8,.2,1) both;
       }
       .boot__name {
-        color: #5c6472;
+        color: #4b627d;
         font-size: 13px;
-        letter-spacing: 4px;
+        letter-spacing: 5px;
+        animation: nameIn .6s .08s both;
       }
+      @keyframes bootIn { from { opacity: 0 } to { opacity: 1 } }
+      @keyframes logoIn { from { opacity: 0; transform: translateY(8px) scale(.92) } to { opacity: 1; transform: none } }
+      @keyframes nameIn { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
     </style>
     <script type="module" src="/src/main.ts"></script>
   </body>

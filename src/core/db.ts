@@ -10,7 +10,7 @@ export interface KV {
  * 本地优先存储：MVP 用 IndexedDB（Dexie），无需后端进程。
  * 所有表都按「可整体导出/导入」设计，后续迁移到 SQLite 或其他端时按表搬运即可。
  */
-class QPersonaDB extends Dexie {
+class JianYieDB extends Dexie {
   characters!: Table<Character, string>
   conversations!: Table<Conversation, string>
   messages!: Table<Message, string>
@@ -41,7 +41,7 @@ class QPersonaDB extends Dexie {
   }
 }
 
-export const db = new QPersonaDB()
+export const db = new JianYieDB()
 
 /**
  * IndexedDB 用 structured clone 写数据，而 Pinia 里的对象是 Proxy，直接 put 会抛

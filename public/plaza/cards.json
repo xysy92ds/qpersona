@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "name": "Q伴 示例广场",
+  "name": "笺页 示例广场",
   "updatedAt": "2026-11-23",
   "cards": [
     {
       "id": "demo-zhixia",
-      "author": "Q伴",
+      "author": "笺页",
       "uploadedAt": 1763827200000,
       "downloads": 128,
       "avatar": "",
@@ -46,7 +46,7 @@
     },
     {
       "id": "demo-zhouyu",
-      "author": "Q伴",
+      "author": "笺页",
       "uploadedAt": 1763740800000,
       "downloads": 76,
       "video": false,
@@ -85,7 +85,7 @@
     },
     {
       "id": "demo-xutang",
-      "author": "Q伴",
+      "author": "笺页",
       "uploadedAt": 1763654400000,
       "downloads": 54,
       "qq": {

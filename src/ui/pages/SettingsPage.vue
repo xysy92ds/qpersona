@@ -169,7 +169,7 @@ async function exportData() {
   ])
   const payload = {
     app: 'qpersona',
-    version: '0.17.0',
+    version: '0.18.0',
     exportedAt: new Date().toISOString(),
     characters,
     conversations,
@@ -280,7 +280,7 @@ function goBack() {
           <div class="cell-icon" style="background: #3b82f6"><CreateOutline /></div>
           <div class="cell__body">
             <div class="cell__title">编辑资料</div>
-            <div class="cell__desc">{{ settings.user.nickname }} · QQ {{ settings.user.qqNumber }}</div>
+            <div class="cell__desc">{{ settings.user.nickname }} · 笺号 {{ settings.user.qqNumber }}</div>
           </div>
           <ChevronForward class="chev" />
         </button>
@@ -599,13 +599,13 @@ function goBack() {
       <div class="sheet-block">
         <div class="cell" style="cursor: default">
           <div class="cell__body"><div class="cell__title">笺页 / JianYIE</div><div class="cell__desc">开源非商业 · 学习与演示用途</div></div>
-          <span class="cell__value">0.17.0</span>
+          <span class="cell__value">0.18.0</span>
         </div>
       </div>
 
       <div class="foot">
-        本项目界面风格参考 QQ，相关素材版权归腾讯所有；<br />
-        所有「好友」均为本地 AI 角色，不连接任何真实聊天服务。
+        界面与图标均为原创；<br />
+        当前版本不连接真实聊天服务，好友均为本地角色。
       </div>
     </div>
 

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { Capacitor } from '@capacitor/core'
+import { SpeechRecognition as NativeSpeech } from '@capacitor-community/speech-recognition'
 import { useRouter } from 'vue-router'
 import {
   AddCircleOutline,
@@ -75,6 +77,9 @@ let recStream: MediaStream | null = null
 let recStart = 0
 let recTimer: number | null = null
 let cancelRecorded = false
+let nativeSpeechActive = false
+let nativeListener: { remove: () => Promise<void> } | null = null
+const native = Capacitor.isNativePlatform()
 
 const EMOJIS = [
   '😀', '😄', '😁', '😆', '🥹', '😊', '🙂', '😉',
@@ -274,15 +279,47 @@ async function onFile(e: Event) {
 }
 
 /** 语音转文字：用浏览器自带的识别能力，没有就直说 */
-function startSpeech() {
+async function startSpeech() {
   moreOpen.value = false
-  if (listening.value && rec) {
-    rec.stop()
+  if (listening.value) {
+    await stopSpeech()
+    return
+  }
+  if (native) {
+    try {
+      const perm = await NativeSpeech.requestPermissions()
+      if (perm.speechRecognition !== 'granted') {
+        showToast('请在系统设置里允许麦克风和语音识别')
+        return
+      }
+      const avail = await NativeSpeech.available()
+      if (!avail.available) {
+        showToast('这台设备的语音识别不可用')
+        return
+      }
+      if (!nativeListener) {
+        nativeListener = await NativeSpeech.addListener('partialResults', (data) => {
+          const match = data.matches?.[0]
+          if (match) {
+            text.value = match
+            nextTick(resize)
+          }
+        })
+      }
+      await NativeSpeech.start({ language: 'zh-CN', partialResults: true, popup: false })
+      nativeSpeechActive = true
+      listening.value = true
+      showToast('正在听…再点一次「语音转文字」结束')
+    } catch (e) {
+      listening.value = false
+      nativeSpeechActive = false
+      showToast(e instanceof Error ? e.message : '语音识别启动失败')
+    }
     return
   }
   const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
   if (!SR) {
-    showToast('这个浏览器没有语音输入，换 Chrome 试试')
+    showToast('当前环境没有语音输入，去 AI 设置里配置「语音识别」槽位')
     return
   }
   const r = new SR()
@@ -305,6 +342,26 @@ function startSpeech() {
   rec = r
   listening.value = true
   showToast('正在听…说完会自动填进来')
+}
+
+async function stopSpeech() {
+  if (nativeSpeechActive) {
+    nativeSpeechActive = false
+    listening.value = false
+    try {
+      await NativeSpeech.stop()
+    } catch {
+      /* ignore */
+    }
+    return
+  }
+  if (rec) {
+    try {
+      rec.stop()
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {
@@ -400,6 +457,9 @@ function cancelRecording() {
 }
 
 onUnmounted(() => {
+  if (nativeSpeechActive) void NativeSpeech.stop()
+  void nativeListener?.remove()
+  nativeListener = null
   try {
     rec?.stop()
   } catch {

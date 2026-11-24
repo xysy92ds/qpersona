@@ -1,4 +1,4 @@
-/** 内置演示角色：让新装的应用一打开就能看到「QQ 里有个 AI 好友」 */
+/** 内置演示角色：让新装的应用一打开就能看到「聊天列表里有个 AI 好友」 */
 import type { CardData } from '@/core/types'
 import { emptyExt, makeCharacter } from '@/core/card'
 import type { Character } from '@/core/types'

@@ -49,7 +49,7 @@ function normalizeCard(raw: any): CardData {
   }
 }
 
-function normalizeQQ(raw: any): Partial<PersonaExt['qq']> {
+function normalizeChatProfile(raw: any): Partial<PersonaExt['qq']> {
   const q = raw && typeof raw === 'object' ? raw : {}
   return {
     nickname: text(q.nickname, 30) || undefined,
@@ -84,7 +84,7 @@ export function normalizePlaza(raw: unknown): PlazaCard[] {
       uploadedAt: Number(item.uploadedAt) || 0,
       downloads: Math.max(0, Number(item.downloads) || 0),
       card,
-      qq: normalizeQQ(item.qq ?? embedded?.qq),
+      qq: normalizeChatProfile(item.qq ?? embedded?.qq),
       avatar: safeImage(item.avatar),
     })
   }

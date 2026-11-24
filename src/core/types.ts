@@ -1,10 +1,10 @@
 /**
- * QPersona 核心数据模型
+ * 笺页核心数据模型
  *
  * 设计原则：
  * 1. 角色卡以 SillyTavern V2 字段为基线（可直接与酒馆生态互通）；
  * 2. 项目自有字段统一放进 extensions.qpersona，不污染 ST 兼容字段；
- * 3. 会话（Conversation）带 context_profile，同一角色在 QQ 端 / 酒馆端各有独立会话，
+ * 3. 会话（Conversation）带 context_profile，同一角色在短消息端 / 叙事端各有独立会话，
  *    但共享同一份角色卡与记忆存储 —— 这正是「双端互动」的落点。
  */
 
@@ -76,8 +76,8 @@ export interface CardData {
   extensions?: Record<string, unknown>
 }
 
-/** QQ 外壳所需要的资料，与角色人格解耦但绑在同一个角色身上 */
-export interface QQIdentity {
+/** 聊天外壳所需要的资料，与角色人格解耦但绑在同一个角色身上 */
+export interface ChatIdentity {
   qqNumber: string
   nickname?: string
   signature?: string
@@ -99,7 +99,7 @@ export interface ProfilePrompts {
 
 export interface PersonaExt {
   version: 1
-  qq: QQIdentity
+  qq: ChatIdentity
   prompts: ProfilePrompts
   /** 角色级 API 覆盖：不填则用全局槽位绑定 */
   routing: Partial<Record<SlotId, string>>

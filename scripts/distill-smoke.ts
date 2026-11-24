@@ -2,7 +2,7 @@
  * 聊天记录解析 / 统计 / 草稿 / 截图提取 冒烟测试。
  */
 import http from 'node:http'
-import { parseQQText, computeStats, generateDraft, reviseDraft, draftToCard, extractTurnsFromScreenshot } from '../src/core/distill'
+import { parseChatText, computeStats, generateDraft, reviseDraft, draftToCard, extractTurnsFromScreenshot } from '../src/core/distill'
 import type { ApiProfile } from '../src/core/types'
 
 const sample = `---- 2023-11-18 ----
@@ -15,7 +15,7 @@ const sample = `---- 2023-11-18 ----
 [17:06:00] 林知夏：哈哈哈哈哈你别问了
 一些无法识别的系统提示
 `
-const parsed = parseQQText(sample)
+const parsed = parseChatText(sample)
 console.log('1) parse:', parsed.recognized, 'messages | senders:', parsed.senders.map((s) => `${s.name}:${s.count}`).join(','))
 console.log('2) multiline kept:', parsed.turns[2]?.text.includes('累得不想说话'))
 console.log('3) unrecognized:', JSON.stringify(parsed.unrecognized))

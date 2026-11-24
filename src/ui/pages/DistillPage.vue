@@ -6,7 +6,7 @@ import BottomSheet from '@/ui/common/BottomSheet.vue'
 import { useContactsStore } from '@/store/contacts'
 import { useSettingsStore } from '@/store/settings'
 import {
-  parseQQText,
+  parseChatText,
   computeStats,
   generateDraft,
   reviseDraft,
@@ -70,7 +70,7 @@ function parse() {
     showToast('先粘贴聊天记录或选择 txt 文件')
     return
   }
-  const result = parseQQText(raw.value)
+  const result = parseChatText(raw.value)
   if (!result.turns.length) {
     error.value = '没有识别到任何消息。确认导出格式是「---- 日期 ---- / [时间] 昵称：内容」。'
     return
@@ -219,7 +219,7 @@ const particleText = computed(() => {
         <div class="intro">
           <div class="intro__title">先有记录，才有人设</div>
           <div class="intro__text">
-            支持电脑 QQ「消息管理器」导出的 txt，也可以直接粘贴。解析后会先统计句长、标点、口头禅，
+            支持从电脑版聊天软件导出的 txt，也可以直接粘贴。解析后会先统计句长、标点、口头禅，
             再让模型写卡——先数，再写。
           </div>
         </div>
@@ -371,10 +371,10 @@ const particleText = computed(() => {
 
     <BottomSheet v-model="help" title="拿不到聊天记录？">
       <div class="help">
-        <h4>电脑 QQ（电脑版）</h4>
-        <p>打开电脑 QQ → 左下角「消息管理器」→ 选中好友 → 右键「导出消息记录」→ 选 txt。
+        <h4>电脑版聊天软件</h4>
+        <p>打开电脑版聊天软件的消息管理器 → 选中好友 → 导出聊天记录 → 选 txt。
           导出的是明文，里面形如「---- 2023-11-18 ----」和「[17:03:21] 昵称：内容」。</p>
-        <h4>手机 QQ</h4>
+        <h4>手机端聊天软件</h4>
         <p>手机端没有直接的 txt 导出，备份只能恢复不能读。最实际的办法是长按复制少量消息粘贴进来，
           或者用「凭印象写几句」。</p>
         <h4>都没有</h4>

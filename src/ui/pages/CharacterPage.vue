@@ -188,7 +188,7 @@ function goBack() {
         </button>
         <div class="hero__body">
           <div class="hero__name">{{ ch.card.name }}</div>
-          <div class="hero__meta">QQ {{ ch.ext.qq.qqNumber }} · {{ ch.ext.qq.nickname }}</div>
+          <div class="hero__meta">笺号 {{ ch.ext.qq.qqNumber }} · {{ ch.ext.qq.nickname }}</div>
           <div class="hero__sign">{{ ch.ext.qq.signature || '这个人很懒，什么都没写' }}</div>
           <div v-if="ch.card.tags?.length" class="hero__tags">
             <span v-for="t in ch.card.tags.slice(0, 6)" :key="t" class="tag">{{ t }}</span>

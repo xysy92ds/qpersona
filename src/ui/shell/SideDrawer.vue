@@ -94,7 +94,7 @@ function onTouchEnd() {
               <Avatar :name="settings.user.nickname" :src="settings.user.avatar" :size="64" />
               <div class="drawer-id__text">
                 <div class="drawer-name">{{ settings.user.nickname }}</div>
-                <div class="drawer-qq">QQ {{ settings.user.qqNumber }}</div>
+                <div class="drawer-qq">笺号 {{ settings.user.qqNumber }}</div>
               </div>
             </div>
             <div class="drawer-sign">
@@ -120,7 +120,7 @@ function onTouchEnd() {
           <button class="drawer-mode" @click="settings.toggleTheme()">
             <MoonOutline /> {{ settings.isDark ? '切到浅色' : '夜间模式' }}
           </button>
-          <span class="drawer-ver">笺页 0.17.0</span>
+          <span class="drawer-ver">笺页 0.18.0</span>
         </div>
         <div class="drawer-hint">向左滑动关闭</div>
       </aside>

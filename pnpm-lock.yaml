@@ -8,12 +8,18 @@ importers:
 
   .:
     dependencies:
+      '@capacitor-community/speech-recognition':
+        specifier: ^7.0.1
+        version: 7.0.1(@capacitor/core@8.6.2)
       '@capacitor/android':
         specifier: ^8.6.2
         version: 8.6.2(@capacitor/core@8.6.2)
       '@capacitor/core':
         specifier: ^8.6.2
         version: 8.6.2
+      '@capacitor/status-bar':
+        specifier: ^8.0.4
+        version: 8.0.4(@capacitor/core@8.6.2)
       '@vicons/ionicons5':
         specifier: ^0.13.0
         version: 0.13.0
@@ -54,6 +60,9 @@ importers:
       fake-indexeddb:
         specifier: ^6.2.8
         version: 6.2.8
+      playwright:
+        specifier: ^1.65.1
+        version: 1.65.1
       typescript:
         specifier: ~5.9.0
         version: 5.9.3
@@ -83,6 +92,11 @@ packages:
     resolution: {integrity: sha512-/XKpKDakL//LZ66bq1XsZOswuqeI5MZqPLDu18o3XdkU1fNJ7bdPtzgnc4ZNS+bBGHV0FJG8jjb8SwcC3nNVQQ==}
     engines: {node: '>=6.9.0'}
 
+  '@capacitor-community/speech-recognition@7.0.1':
+    resolution: {integrity: sha512-ykpBZziR575X0eURO5vXaD9gVrXXC/7Ra2qql/2KP6/jxWOqAFuw4eKjSPjwdAgGE6a/Z+v8FJm4SVh57MVwDA==}
+    peerDependencies:
+      '@capacitor/core': '>=7.0.0'
+
   '@capacitor/android@8.6.2':
     resolution: {integrity: sha512-dWXnXmOVTtxU91n5h11MzoQ7PAMjyzU1qguw0mBJZiwSuhGvLKTG/IlsQ75H8qeE0a1acV2f573x15wYvyzuVA==}
     peerDependencies:
@@ -95,6 +109,11 @@ packages:
 
   '@capacitor/core@8.6.2':
     resolution: {integrity: sha512-UEb9crRuqEAe2Iu2eGOEuQ8rLQxpwg7ZZIpl17UJoytEpnV1e4oXXW0K7yYS2NsCOGmJjyLeKjNlgG7tkAoX8g==}
+
+  '@capacitor/status-bar@8.0.4':
+    resolution: {integrity: sha512-ZMzBUyHBzwDUxcHadEhvOvmoPmMQGMZgaMRJu8ohELeI6IaxoVH9ZhdF/OHnY3/yykv3Glev8Tnbh4aZY/0B0w==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
 
   '@esbuild/aix-ppc64@0.28.2':
     resolution: {integrity: sha512-XExcO+dvLKvVtNTibSTBej1NCAbaGhWn9Ww1ZPx80qsahhPFe/8jgWP0IchNe0F3HwkU7n8ejhH8bjonqht8mQ==}
@@ -808,6 +827,16 @@ packages:
       typescript:
         optional: true
 
+  playwright-core@1.65.1:
+    resolution: {integrity: sha512-hqPpz7blSMPxWVdoeE1yiBSzXsKiVOd2k+kjCvmUywD2GPO2Dd9HfcWnq9NN0GHbNZDFgZ9JfBFr+X5/BLo0qw==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright@1.65.1:
+    resolution: {integrity: sha512-vJ1FuoOrNwOKHUIVEvSt3jT1L+wjjDpwhwIstKtfvTh8XIG4FG4bIFuvNdMxi81LGfAhUgUZleVFaOLY4RIUUw==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   plist@3.1.1:
     resolution: {integrity: sha512-ZIfcLJC+7E7FBFnDxm9MPmt7D+DidyQ26lewieO75AdhA2ayMtsJSES0iWzqJQbcVRSrTufQoy0DR94xHue0oA==}
     engines: {node: '>=10.4.0'}
@@ -1063,6 +1092,10 @@ snapshots:
       '@babel/helper-string-parser': 7.29.15
       '@babel/helper-validator-identifier': 7.29.7
 
+  '@capacitor-community/speech-recognition@7.0.1(@capacitor/core@8.6.2)':
+    dependencies:
+      '@capacitor/core': 8.6.2
+
   '@capacitor/android@8.6.2(@capacitor/core@8.6.2)':
     dependencies:
       '@capacitor/core': 8.6.2
@@ -1093,6 +1126,10 @@ snapshots:
   '@capacitor/core@8.6.2':
     dependencies:
       tslib: 2.9.1
+
+  '@capacitor/status-bar@8.0.4(@capacitor/core@8.6.2)':
+    dependencies:
+      '@capacitor/core': 8.6.2
 
   '@esbuild/aix-ppc64@0.28.2':
     optional: true
@@ -1715,6 +1752,12 @@ snapshots:
       vue: 3.5.46(typescript@5.9.3)
     optionalDependencies:
       typescript: 5.9.3
+
+  playwright-core@1.65.1: {}
+
+  playwright@1.65.1:
+    dependencies:
+      playwright-core: 1.65.1
 
   plist@3.1.1:
     dependencies:

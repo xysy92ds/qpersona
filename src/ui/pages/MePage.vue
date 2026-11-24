@@ -64,7 +64,7 @@ onMounted(async () => {
           <div class="me__body">
             <div class="me__name">{{ settings.user.nickname }}</div>
             <div class="me__meta">
-              <span class="me__qq">QQ {{ settings.user.qqNumber }}</span>
+              <span class="me__qq">笺号 {{ settings.user.qqNumber }}</span>
             </div>
             <button class="me__sign" @click="router.push('/profile')">
               {{ settings.user.signature || '点这里写一句个性签名' }}
@@ -123,7 +123,7 @@ onMounted(async () => {
         <button class="cell" @click="about = true">
           <div class="cell-icon" style="background: #94a3b8"><InformationCircleOutline /></div>
           <div class="cell__body"><div class="cell__title">关于 笺页</div></div>
-          <span class="cell__value">0.17.0</span>
+          <span class="cell__value">0.18.0</span>
           <ChevronForward class="chev" />
         </button>
       </div>
@@ -133,14 +133,15 @@ onMounted(async () => {
 
     <BottomSheet v-model="about" title="关于 笺页">
       <div class="about">
-        <div class="about__logo">Q</div>
-        <div class="about__name">笺页 / JianYIE 0.17.0</div>
+        <div class="about__logo">笺</div>
+        <div class="about__name">笺页 / JianYIE 0.18.0</div>
         <p>
-          看起来像聊天软件，用起来也是 —— 但好友全都是 AI 角色。<br />
-          以经典聊天软件为交互外壳、以酒馆角色卡为人格内核，数据全部保存在这台设备上。
+          本地优先的 AI 角色聊天应用。<br />
+          角色卡、聊天记录、记忆和外观都保存在本机；可以导入角色卡、从零创建，或用聊天记录培养一个角色。<br />
+          真人好友与云端同步会在后续版本加入。
         </p>
         <p class="about__dim">
-          界面为原创实现，不使用腾讯的图片或图标素材。<br />
+          界面与图标均为原创。<br />
           本项目开源、非商业，仅用于学习与技术演示。
         </p>
       </div>

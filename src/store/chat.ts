@@ -45,7 +45,7 @@ function nextTs(list: Message[]): number {
 }
 
 /**
- * QQ 端把一段回复拆成几条短消息，更像真人发消息。
+ * 短消息端把一段回复拆成几条短消息，更像真人发消息。
  * 太长或分行过多就保持一条，避免刷屏。
  */
 function splitBubbles(text: string): string[] {
@@ -750,7 +750,7 @@ export const useChatStore = defineStore('chat', {
       reply.usageEstimated = !u
       reply.cost = costOf(usage, resolvePrice(profile))
 
-      // QQ 端：把多行回复拆成连续几条气泡；[表情:名字] 会换成真的表情包
+      // 短消息端：把多行回复拆成连续几条气泡；[表情:名字] 会换成真的表情包
       let preview = reply.text
       if (reply.status === 'ok' && conv.profile === 'qq' && !opts?.call) {
         const rawParts = settings.chat.autoSplit ? splitBubbles(reply.text) : [reply.text]

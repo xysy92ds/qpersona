@@ -5,8 +5,6 @@ import {
   AddOutline,
   BookOutline,
   ChatbubblesOutline,
-  CloudUploadOutline,
-  CreateOutline,
   NotificationsOffOutline,
   PeopleOutline,
   PersonAddOutline,
@@ -62,7 +60,7 @@ function open(c: Conversation) {
   router.push(`/chat/${c.id}`)
 }
 
-// —— 长按菜单（QQ 的置顶 / 免打扰 / 删除都在这里）——
+// —— 长按菜单（置顶 / 免打扰 / 删除都在这里）——
 let pressTimer: number | null = null
 let suppressClick = false
 let startX = 0
@@ -132,9 +130,7 @@ type MenuItem = {
 }
 
 const menuItems: MenuItem[] = [
-  { label: '加好友', icon: PersonAddOutline, color: '#3b82f6', to: '/add' },
-  { label: '导入角色卡', icon: CloudUploadOutline, color: '#0ea5e9', to: '/add?action=import' },
-  { label: '新建角色', icon: CreateOutline, color: '#f59e0b', to: '/add?action=create' },
+  { label: '添加朋友', icon: PersonAddOutline, color: '#3b82f6', to: '/add' },
   { label: '发起群聊', icon: PeopleOutline, color: '#22c55e', to: '/group/new' },
   { label: '搜索', icon: SearchOutline, color: '#64748b', to: '/search' },
   { label: '酒馆', icon: BookOutline, color: '#f97316', to: '/tavern' },
@@ -205,7 +201,7 @@ function runMenu(item: (typeof menuItems)[number]) {
 
       <div v-else class="empty">
         <ChatbubblesOutline />
-        <div>还没有聊天。点右上角「+」导入角色卡，<br />或者去「联系人」看看。</div>
+        <div>还没有聊天。点右上角「+」添加朋友，<br />或者去「联系人」看看。</div>
       </div>
     </div>
 

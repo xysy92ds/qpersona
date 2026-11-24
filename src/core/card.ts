@@ -12,7 +12,7 @@ export interface ParsedCard {
   rawName?: string
 }
 
-function randomQQ(): string {
+function randomChatNumber(): string {
   return String(Math.floor(1e8 + Math.random() * 8.9e8))
 }
 
@@ -20,7 +20,7 @@ export function emptyExt(name: string, origin: PersonaExt['origin'] = 'custom'):
   return {
     version: 1,
     qq: {
-      qqNumber: randomQQ(),
+      qqNumber: randomChatNumber(),
       nickname: name,
       signature: '',
       interests: [],

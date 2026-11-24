@@ -99,7 +99,7 @@ export const useContactsStore = defineStore('contacts', {
       this.conversations = this.conversations.filter((c) => c.characterId !== id)
     },
 
-    /** 单聊会话按 (角色, 端) 唯一；QQ 与酒馆各自一条，共享角色卡 */
+    /** 单聊会话按 (角色, 端) 唯一；短消息与叙事各自一条，共享角色卡 */
     async ensureConversation(
       characterId: string,
       profile: ContextProfileId = 'qq',

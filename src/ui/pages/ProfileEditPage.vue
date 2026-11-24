@@ -51,7 +51,7 @@ async function pickBackground(e: Event) {
   }
 }
 
-function randomQQ() {
+function randomChatNumber() {
   qqNumber.value = String(Math.floor(1e8 + Math.random() * 8.9e8))
   showToast('换了一个随机 笺号')
 }
@@ -137,7 +137,7 @@ function goBack() {
         <label class="field">
           <span class="field__label">
             笺号
-            <button class="random" @click.prevent="randomQQ"><RefreshOutline /> 随机一个</button>
+            <button class="random" @click.prevent="randomChatNumber"><RefreshOutline /> 随机一个</button>
           </span>
           <input v-model="qqNumber" class="input" inputmode="numeric" maxlength="12" placeholder="5~12 位数字" />
         </label>

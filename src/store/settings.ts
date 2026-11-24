@@ -46,7 +46,7 @@ export interface ProactivePlan {
 }
 
 export interface ChatPrefs {
-  /** 模型回多行时自动拆成几条 QQ 消息 */
+  /** 模型回多行时自动拆成几条消息 */
   autoSplit: boolean
   /** 聊天里显示时间分隔 */
   showTime: boolean

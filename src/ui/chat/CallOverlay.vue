@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { Capacitor } from '@capacitor/core'
+import { SpeechRecognition as NativeSpeech } from '@capacitor-community/speech-recognition'
 import { CallOutline, MicOutline, MicOffOutline, CloseOutline } from '@vicons/ionicons5'
 import Avatar from '@/ui/common/Avatar.vue'
 import { useChatStore } from '@/store/chat'
@@ -44,7 +46,26 @@ let resolveRecognition: ((text: string) => void) | null = null
 let audioEl: HTMLAudioElement | null = null
 let audioUrl: string | null = null
 let watchdog: number | null = null
+let nativeStart: Promise<{ matches?: string[] }> | null = null
+const native = Capacitor.isNativePlatform()
 const closed = ref(false)
+
+function cancelSpeech() {
+  try {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) window.speechSynthesis.cancel()
+  } catch {
+    /* ignore */
+  }
+}
+
+async function stopNative() {
+  try {
+    await NativeSpeech.stop()
+  } catch {
+    /* not listening */
+  }
+  nativeStart = null
+}
 
 onMounted(() => {
   timer = window.setInterval(() => (seconds.value += 1), 1000)
@@ -86,11 +107,20 @@ function stopBrowserRecognition(): Promise<string> {
       resolve('')
       return
     }
-    resolveRecognition = resolve
+    let done = false
+    const finish = (text: string) => {
+      if (done) return
+      done = true
+      window.clearTimeout(watchTimer)
+      resolveRecognition = null
+      resolve(text)
+    }
+    const watchTimer = window.setTimeout(() => finish(''), 8000)
+    resolveRecognition = finish
     try {
       recognition.stop()
     } catch {
-      resolve('')
+      finish('')
     }
   })
 }
@@ -99,6 +129,26 @@ async function startTurn() {
   if (status.value !== 'idle' || muted.value) return
   error.value = ''
   try {
+    if (native && !sttProfile.value) {
+      const perm = await NativeSpeech.requestPermissions()
+      if (perm.speechRecognition !== 'granted') throw new Error('请允许语音识别和麦克风权限')
+      const avail = await NativeSpeech.available()
+      if (!avail.available) throw new Error('这台设备的语音识别不可用')
+      const pending = NativeSpeech.start({
+        language: 'zh-CN',
+        maxResults: 1,
+        partialResults: false,
+        popup: false,
+      })
+      nativeStart = pending
+      pending.catch((e) => {
+        if (nativeStart === pending) nativeStart = null
+        error.value = e instanceof Error ? e.message : '语音识别启动失败'
+        status.value = 'idle'
+      })
+      status.value = 'listening'
+      return
+    }
     if (sttProfile.value) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const mime =
@@ -117,12 +167,12 @@ async function startTurn() {
       return
     }
     if (!startBrowserRecognition()) {
-      error.value = '这个浏览器不支持语音识别，去 AI 设置里配置「语音识别」槽位'
+      error.value = '当前环境没有语音识别，去 AI 设置里配置「语音识别」槽位'
       return
     }
     status.value = 'listening'
-  } catch {
-    error.value = '麦克风打不开，检查一下权限'
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '麦克风打不开，检查一下权限'
     status.value = 'idle'
   }
 }
@@ -148,7 +198,15 @@ async function endTurn() {
   status.value = 'thinking'
   let text = ''
   try {
-    if (recorder) {
+    if (nativeStart) {
+      const pending = nativeStart
+      await stopNative()
+      const res = await Promise.race([
+        pending,
+        new Promise<{ matches?: string[] }>((resolve) => window.setTimeout(() => resolve({}), 15000)),
+      ])
+      text = res.matches?.[0] ?? ''
+    } else if (recorder) {
       const blob = await stopRecorder()
       cleanupMic()
       if (!blob.size) throw new Error('没有录到声音')
@@ -241,7 +299,7 @@ function toggleMute() {
   muted.value = !muted.value
   if (muted.value) {
     audioEl?.pause()
-    speechSynthesis?.cancel()
+    cancelSpeech()
     if (status.value === 'listening') {
       try {
         recorder?.stop()
@@ -257,26 +315,32 @@ function toggleMute() {
 
 function hangup() {
   closed.value = true
-  if (timer) window.clearInterval(timer)
-  timer = null
-  if (watchdog) {
-    window.clearTimeout(watchdog)
-    watchdog = null
-  }
-  // 正在等模型时也要能挂断：先中止这一轮请求
-  chat.stop(props.conversationId)
-  audioEl?.pause()
-  speechSynthesis?.cancel()
   try {
-    recorder?.stop()
-  } catch {
-    /* ignore */
+    if (timer) window.clearInterval(timer)
+    timer = null
+    if (watchdog) {
+      window.clearTimeout(watchdog)
+      watchdog = null
+    }
+    // 正在等模型时也要能挂断：先中止这一轮请求
+    chat.stop(props.conversationId)
+    audioEl?.pause()
+    cancelSpeech()
+    try {
+      recorder?.stop()
+    } catch {
+      /* ignore */
+    }
+    recognition?.abort?.()
+    void stopNative()
+    cleanupMic()
+    status.value = 'idle'
+    void chat.addTip(props.conversationId, `通话结束 · ${clock.value}`)
+  } catch (e) {
+    console.warn('[call] hangup', e)
+  } finally {
+    emit('close')
   }
-  recognition?.abort?.()
-  cleanupMic()
-  status.value = 'idle'
-  void chat.addTip(props.conversationId, `通话结束 · ${clock.value}`)
-  emit('close')
 }
 
 onUnmounted(() => {
@@ -287,9 +351,10 @@ onUnmounted(() => {
     watchdog = null
   }
   audioEl?.pause()
-  speechSynthesis?.cancel()
+  cancelSpeech()
   cleanupMic()
   recognition?.abort?.()
+  void stopNative()
 })
 </script>
 
@@ -297,7 +362,7 @@ onUnmounted(() => {
   <div class="call">
     <div class="call__glow" />
     <div class="call__top">
-      <button class="call__close" aria-label="挂断" @click="hangup"><CloseOutline /></button>
+      <button type="button" class="call__close" aria-label="挂断" @click="hangup"><CloseOutline /></button>
       <Avatar :name="character.card.name" :src="character.ext.qq.avatar" :size="96" round />
       <div class="call__name">{{ character.card.name }}</div>
       <div class="call__status">{{ statusText }}</div>
@@ -313,30 +378,34 @@ onUnmounted(() => {
           <p>{{ lastSaid }}</p>
         </div>
         <div v-if="!lastHeard && !lastSaid" class="call__hint">
-          按住下面的按钮说话，松开后 TA 会接话。{{ sttProfile || ttsProfile ? '' : '当前用浏览器的识别与朗读。' }}
+          按住下面的按钮说话，松开后 TA 会接话。{{
+            sttProfile || ttsProfile ? '' : native ? '当前使用系统语音识别。' : '当前用浏览器的识别与朗读。'
+          }}
         </div>
       </div>
       <div v-if="error" class="call__error">{{ error }}</div>
     </div>
 
     <div class="call__controls">
-      <button class="call__ctrl" :class="{ active: muted }" @click="toggleMute">
+      <button type="button" class="call__ctrl" :class="{ active: muted }" @click="toggleMute">
         <MicOffOutline v-if="muted" />
         <MicOutline v-else />
         <span>{{ muted ? '取消静音' : '静音' }}</span>
       </button>
       <button
+        type="button"
         class="call__ptt"
         :class="{ active: status === 'listening', disabled: muted || status === 'thinking' || status === 'speaking' }"
         @pointerdown.prevent="startTurn"
         @pointerup.prevent="endTurn"
+        @pointercancel.prevent="status === 'listening' && endTurn()"
         @pointerleave="status === 'listening' && endTurn()"
         @contextmenu.prevent
       >
         <MicOutline />
         <span>{{ status === 'listening' ? '松开结束' : '按住说话' }}</span>
       </button>
-      <button class="call__ctrl call__ctrl--hangup" @click="hangup">
+      <button type="button" class="call__ctrl call__ctrl--hangup" @click="hangup">
         <CallOutline />
         <span>挂断</span>
       </button>
@@ -479,6 +548,7 @@ onUnmounted(() => {
 }
 .call__ptt {
   flex: 1;
+  touch-action: none;
   height: 82px;
   border-radius: 22px;
   display: flex;

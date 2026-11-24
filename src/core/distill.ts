@@ -20,12 +20,12 @@ const MSG_RE = /^\[(\d{1,2}):(\d{2})(?::(\d{2}))?\]\s*([^:：]{1,40})[：:]\s?([
 const MSG_RE_FULL = /^\[(\d{4})-(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\]\s*([^:：]{1,40})[：:]\s?([\s\S]*)$/
 
 /**
- * 解析「电脑 QQ → 消息管理器 → 导出 txt」常见的格式：
+ * 解析常见的聊天记录导出格式：
  *   ---- 2023-11-18 ----
  *   [17:03:21] 昵称：内容
  * 多行消息会接到上一条；其它行记为未识别。
  */
-export function parseQQText(raw: string): ParseResult {
+export function parseChatText(raw: string): ParseResult {
   const lines = raw.replace(/\r\n?/g, '\n').split('\n')
   const turns: Turn[] = []
   const unrecognized: string[] = []

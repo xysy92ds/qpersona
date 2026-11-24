@@ -195,8 +195,8 @@ function goBack() {
 
       <template v-if="tab === 'add'">
       <div class="banner">
-        <div class="banner__title">这里没有真实好友</div>
-        <div class="banner__text">三种方式造一个角色：导入酒馆卡、从零捏一个，或者用聊天记录培养。</div>
+        <div class="banner__title">先加一个角色</div>
+        <div class="banner__text">导入酒馆卡、从零创建，或用聊天记录培养。真人好友会在后续版本加入。</div>
       </div>
 
       <div class="sheet-block options">
@@ -229,7 +229,7 @@ function goBack() {
           </div>
           <div class="option__body">
             <div class="option__title">用聊天记录培养</div>
-            <div class="option__desc">上传 txt 或截图，统计语感，两轮反馈后生成角色卡</div>
+            <div class="option__desc">上传 txt 或直接粘贴，统计语感，两轮反馈后生成角色卡</div>
           </div>
           <ChevronForward class="chev" />
         </button>
@@ -237,7 +237,7 @@ function goBack() {
 
       <div class="hint">
         <BookOutline style="width: 13px; height: 13px; vertical-align: -2px" />
-        导入的卡片只保存在本地。角色卡字段遵循 SillyTavern V2 规范，项目自有字段放在 extensions.qpersona 里。
+        导入的卡片只保存在本地。角色卡字段遵循 SillyTavern V2 规范，项目自有字段放在角色卡扩展字段里。
       </div>
       </template>
 
