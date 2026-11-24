@@ -27,6 +27,7 @@ API Key 不参与同步；新设备登录后需要自己重新填模型 Key。
 - `POST /api/friends/accept` `{id}` / `POST /api/friends/reject` `{id}`；
 - `POST /api/dm/send` `{to,text}`：仅好友可发；
 - `GET /api/dm/poll?since=`：拉取 7 天内的中转消息；
+- `GET /api/dm/status?ids=`：发送方查看已发送/已送达/过期；
 - Cron 每天删除过期的中转消息。
 
 ## API

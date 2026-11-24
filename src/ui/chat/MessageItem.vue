@@ -18,6 +18,13 @@ const props = defineProps<{
 }>()
 
 const isSelf = computed(() => props.message.role === 'user')
+const deliveryText = computed(() => {
+  const d = props.message.delivery
+  if (!props.message.relayId || !isSelf.value) return ''
+  if (d === 'delivered') return '已送达'
+  if (d === 'expired') return '未送达 · 已过期'
+  return '已发送'
+})
 const name = computed(() => (isSelf.value ? props.userName : props.characterName))
 const avatar = computed(() => (isSelf.value ? props.userAvatar || avatarSvg(props.userName) : props.characterAvatar))
 const isTip = computed(() => props.message.kind === 'tip')
@@ -213,6 +220,7 @@ function move(e: PointerEvent) {
         </span>
       </template>
     </QText>
+    <span v-if="deliveryText" class="msg__delivery">{{ deliveryText }}</span>
     <div
       v-if="showUsage && !isSelf && message.usage"
       class="usage"

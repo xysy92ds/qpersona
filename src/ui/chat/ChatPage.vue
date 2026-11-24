@@ -143,12 +143,19 @@ async function enter() {
   window.setTimeout(() => (armed = true), 350)
 }
 
-onMounted(enter)
+let deliveryTimer: number | null = null
+
+onMounted(() => {
+  void enter()
+  void chat.checkDelivery(props.id)
+  deliveryTimer = window.setInterval(() => void chat.checkDelivery(props.id), 15_000)
+})
 watch(
   () => props.id,
   () => {
     sheet.value = false
     void enter()
+    void chat.checkDelivery(props.id)
   },
 )
 
@@ -279,6 +286,7 @@ watch(
 
 onUnmounted(() => {
   if ('speechSynthesis' in window) speechSynthesis.cancel()
+  if (deliveryTimer) window.clearInterval(deliveryTimer)
 })
 
 /* ---- 消息长按 ---- */

@@ -20,8 +20,10 @@ import { describeImage, streamChat } from '@/core/llm'
 import { uid, sleep } from '@/core/util'
 import { costOf, estimateTokens, resolvePrice } from '@/core/pricing'
 import { useContactsStore } from './contacts'
+import { useCloudStore } from './cloud'
 import { useMemoryStore } from './memory'
 import { useHumanStore } from './human'
+import { fetchDelivery } from '@/core/human'
 import { useSettingsStore } from './settings'
 import { useStickersStore } from './stickers'
 
@@ -124,8 +126,12 @@ export const useChatStore = defineStore('chat', {
       const peer = contacts.characterById(conv.characterId)
       if (peer?.ext.human) {
         try {
-          await useHumanStore().send(convId, text)
+          const sent = await useHumanStore().send(convId, text)
+          userMsg.relayId = sent.id
+          userMsg.relayExpiresAt = sent.expiresAt
+          userMsg.delivery = 'sent'
           userMsg.status = 'ok'
+          await putMessage(userMsg)
         } catch (e) {
           userMsg.status = 'error'
           userMsg.error = e instanceof Error ? e.message : '发送失败'
@@ -632,6 +638,39 @@ export const useChatStore = defineStore('chat', {
         groupWakeAt: { ...(latest?.groupWakeAt ?? {}), [ch.id]: opts.wakeFrom },
       })
       return true
+    },
+
+    /** 查询真人消息的送达/过期状态 */
+    async checkDelivery(convId: string) {
+      const cloud = useCloudStore()
+      if (!cloud.loggedIn) return
+      const settings = useSettingsStore()
+      const list = this.byConv[convId] ?? []
+      const pending = list.filter(
+        (m) => m.role === 'user' && m.relayId && m.delivery !== 'delivered' && m.delivery !== 'expired',
+      )
+      if (!pending.length) return
+      try {
+        const res = await fetchDelivery(
+          settings.cloudUrl,
+          cloud.token,
+          pending.map((m) => m.relayId!),
+        )
+        const map = new Map((res.items || []).map((i) => [i.id, i]))
+        for (const m of pending) {
+          const item = map.get(m.relayId!)
+          let next: 'sent' | 'delivered' | 'expired' = m.delivery || 'sent'
+          if (item?.deliveredAt) next = 'delivered'
+          else if (item?.missing || (item?.expiresAt && Date.now() >= item.expiresAt)) next = 'expired'
+          else if (m.relayExpiresAt && Date.now() >= m.relayExpiresAt) next = 'expired'
+          if (next !== m.delivery) {
+            m.delivery = next
+            await putMessage(m)
+          }
+        }
+      } catch {
+        /* 状态查询失败不影响聊天 */
+      }
     },
 
     /** 真正调用模型、流式写回回复的那一段 */

@@ -229,6 +229,25 @@ async function deletePlaza(req, env, user, id) {
 }
 
 
+
+async function dmStatus(req, env, user) {
+  const url = new URL(req.url)
+  const ids = (url.searchParams.get('ids') || '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 100)
+  if (!ids.length) return json(req, { ok: true, items: [] })
+  const placeholders = ids.map(() => '?').join(',')
+  const rows = await env.DB.prepare(
+    `SELECT id, delivered_at, expires_at FROM relay_messages WHERE sender_id = ? AND id IN (${placeholders})`
+  ).bind(user.id, ...ids).all()
+  const map = new Map((rows.results || []).map((r) => [r.id, r]))
+  const now = Date.now()
+  const items = ids.map((id) => {
+    const r = map.get(id)
+    if (!r) return { id, expiresAt: 0, missing: true }
+    return { id, deliveredAt: r.delivered_at || 0, expiresAt: r.expires_at, missing: false, expired: r.expires_at <= now }
+  })
+  return json(req, { ok: true, items })
+}
+
 async function friendsList(req, env, user) {
   const rows = await env.DB.prepare(
     `SELECT f.id, f.requester_id, f.addressee_id, f.status, f.created_at,
@@ -396,6 +415,7 @@ export default {
       if (path === '/api/friends/reject' && req.method === 'POST') return user ? friendReject(req, env, user) : err(req, '未登录', 401)
       if (path === '/api/dm/send' && req.method === 'POST') return user ? dmSend(req, env, user) : err(req, '未登录', 401)
       if (path === '/api/dm/poll' && req.method === 'GET') return user ? dmPoll(req, env, user) : err(req, '未登录', 401)
+      if (path === '/api/dm/status' && req.method === 'GET') return user ? dmStatus(req, env, user) : err(req, '未登录', 401)
       if (path === '/api/plaza/mine' && req.method === 'GET') return user ? plazaMine(req, env, user) : err(req, '未登录', 401)
       if (path === '/api/sync/push' && req.method === 'POST') return user ? push(req, env, user) : err(req, '未登录', 401)
       if (path === '/api/sync/pull' && req.method === 'GET') return user ? pull(req, env, user) : err(req, '未登录', 401)

@@ -262,6 +262,12 @@ export interface Message {
   roundId?: string
   /** 群聊里这条回复针对的消息 ID */
   replyToId?: string
+  /** 真人消息的云端中转 ID */
+  relayId?: string
+  /** 中转过期时间 */
+  relayExpiresAt?: number
+  /** 真人消息送达状态 */
+  delivery?: 'sent' | 'delivered' | 'expired'
   error?: string
   /** 这一次回复的 token 用量（assistant 消息才有） */
   usage?: { prompt: number; completion: number; total: number }

@@ -85,3 +85,12 @@ export function humanCard(peer: HumanPeer): { card: CardData; ext: PersonaExt } 
     },
   }
 }
+
+
+export async function fetchDelivery(base: string, token: string, ids: string[]) {
+  return api<{ items: { id: string; deliveredAt?: number; expiresAt: number; missing?: boolean }[] }>(
+    base,
+    `/api/dm/status?ids=${encodeURIComponent(ids.join(','))}`,
+    token,
+  )
+}
