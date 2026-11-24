@@ -53,7 +53,7 @@ const list = computed(() => contacts.characters)
         </button>
         <div v-if="!list.length" class="empty">还没有好友，去「新的朋友」加一个。</div>
       </div>
-      <div class="foot-note">所有好友都是本地 AI 角色，不涉及真实 QQ 账号</div>
+      <div class="foot-note">所有好友都是本地 AI 角色，不涉及真实聊天账号</div>
     </div>
   </div>
 </template>

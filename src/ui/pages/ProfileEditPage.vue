@@ -53,7 +53,7 @@ async function pickBackground(e: Event) {
 
 function randomQQ() {
   qqNumber.value = String(Math.floor(1e8 + Math.random() * 8.9e8))
-  showToast('换了一个随机 QQ 号')
+  showToast('换了一个随机 笺号')
 }
 
 function resetAvatar() {
@@ -68,7 +68,7 @@ async function save() {
   }
   const qq = qqNumber.value.trim()
   if (!/^\d{5,12}$/.test(qq)) {
-    showToast('QQ 号填 5~12 位数字')
+    showToast('笺号填 5~12 位数字')
     return
   }
   await settings.saveUser({
@@ -136,7 +136,7 @@ function goBack() {
         </label>
         <label class="field">
           <span class="field__label">
-            QQ 号
+            笺号
             <button class="random" @click.prevent="randomQQ"><RefreshOutline /> 随机一个</button>
           </span>
           <input v-model="qqNumber" class="input" inputmode="numeric" maxlength="12" placeholder="5~12 位数字" />
@@ -146,7 +146,7 @@ function goBack() {
           <input v-model="signature" class="input" maxlength="40" placeholder="一句话介绍自己" />
         </label>
         <div class="hint">
-          QQ 号只是一个本地显示用的号码，不涉及真实 QQ 账号。想换成自定义号码直接改就行。
+          笺号只是一个本地显示用的号码，不涉及真实聊天账号。想换成自定义号码直接改就行。
         </div>
       </div>
 

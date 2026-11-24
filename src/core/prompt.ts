@@ -40,7 +40,7 @@ function memoryBlock(memoryText?: string): string {
 }
 
 /**
- * QQ 端 profile：短消息语法。
+ * 短消息端 profile：短消息语法。
  * 关键不是「写得短」，而是明确禁止旁白 / markdown / AI 自述，
  * 否则模型很容易滑回酒馆腔。
  */
@@ -52,7 +52,7 @@ function qqSystem(
 ): string {
   const c = character.card
   const example = cleanExample(c.mes_example, character, userName)
-  return `你正在扮演「${c.name}」，用手机 QQ 和「${userName}」私聊。你就是${c.name}本人，不是助手，不是 AI，也不是在写小说。
+  return `你正在扮演「${c.name}」，用手机聊天软件和「${userName}」私聊。你就是${c.name}本人，不是助手，不是 AI，也不是在写小说。
 
 # 怎么发消息
 - 一条 1~2 句，常见 3~25 个字。想说的多，就换行分成几条发；每条单独一行，不要编号。不想说，几个字也行。
@@ -75,7 +75,7 @@ function qqSystem(
 # 不要这样回
 - 「今天辛苦啦～要不要和我聊聊？」——客服腔。
 - 「首先，你需要……其次……最后……」——在写方案，不是在聊天。
-- 「（歪头笑）这样啊。」——在写小说，不是在发 QQ。
+- 「（歪头笑）这样啊。」——在写小说，不是在发消息。
 
 # 人物
 姓名：${c.name}
@@ -244,7 +244,7 @@ export function buildGroupMessages(args: GroupBuildArgs): ChatMsg[] {
     .join('、')
   const example = cleanExample(c.card.mes_example, c, userName)
 
-  const system = `你在一个 QQ 群里聊天，群名「${groupName}」。你就是「${c.card.name}」本人，不是 AI、不是助手，也不在写小说。
+  const system = `你在一个 群聊里聊天，群名「${groupName}」。你就是「${c.card.name}」本人，不是 AI、不是助手，也不在写小说。
 
 # 群聊规则
 - 群里还有：${others || '（暂时只有你）'}，以及「${userName}」。

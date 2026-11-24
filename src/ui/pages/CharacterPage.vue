@@ -225,7 +225,7 @@ function goBack() {
       <div class="sheet-block">
         <button class="cell" @click="toggle('chat')">
           <div class="cell__body">
-            <div class="cell__title">主对话（QQ / 酒馆通用）</div>
+            <div class="cell__title">主对话（短消息 / 酒馆通用）</div>
             <div class="cell__desc">关闭后这个角色不会调用文本模型</div>
           </div>
           <span class="switch" :class="{ on: ch.ext.toggles.chat }" />
@@ -302,7 +302,7 @@ function goBack() {
       <div class="group-title">双端提示词（调度层实际注入的内容）</div>
       <div class="sheet-block prompt-block">
         <div class="tabs">
-          <button class="tab" :class="{ on: tab === 'qq' }" @click="tab = 'qq'">QQ 短消息</button>
+          <button class="tab" :class="{ on: tab === 'qq' }" @click="tab = 'qq'">短消息</button>
           <button class="tab" :class="{ on: tab === 'tavern' }" @click="tab = 'tavern'">酒馆叙事</button>
         </div>
         <pre class="prompt">{{ promptText }}</pre>

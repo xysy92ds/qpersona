@@ -3,3 +3,10 @@ dist
 .DS_Store
 *.local
 .vite
+
+# Capacitor / Android
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/.idea/

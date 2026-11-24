@@ -334,7 +334,7 @@ export async function extractTurnsFromScreenshot(
           content: [
             {
               type: 'text',
-              text: '这是一张 QQ 聊天截图。请逐条提取左侧（对方）发出的消息，保持原文，不要编造。输出 JSON：{"lines":[{"speaker":"对方","text":"..."}]}。只输出 JSON。',
+              text: '这是一张聊天截图。请逐条提取左侧（对方）发出的消息，保持原文，不要编造。输出 JSON：{"lines":[{"speaker":"对方","text":"..."}]}。只输出 JSON。',
             },
             { type: 'image_url', image_url: { url: dataUrl } },
           ],

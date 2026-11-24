@@ -26,7 +26,7 @@ export interface SlotMeta {
 }
 
 export const SLOTS: SlotMeta[] = [
-  { id: 'text_main', label: '主对话', desc: 'QQ 聊天与酒馆叙事的默认文本模型' },
+  { id: 'text_main', label: '主对话', desc: '短消息与酒馆叙事的默认文本模型' },
   { id: 'memory_summary', label: '记忆总结', desc: '留空则复用主对话模型', optional: true },
   { id: 'vision', label: '图片识别', desc: '识别聊天中发送的图片', optional: true },
   { id: 'embedding', label: '嵌入模型', desc: '语义召回记忆（后续版本启用）', optional: true },

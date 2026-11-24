@@ -81,7 +81,7 @@ interface GroupMemberState {
 
 ## 5. 群聊提示词
 
-单独一份 `groupSystem`，不复用 QQ 单聊：
+单独一份 `groupSystem`，不复用短消息单聊：
 
 - 群里不止你一个人，可以附和、可以怼、可以只回一两个字；
 - 不要每句都接最后一个人，允许冷场；

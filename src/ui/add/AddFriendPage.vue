@@ -391,7 +391,7 @@ function goBack() {
         <div v-if="parsed.warnings.length" class="warn">
           <div v-for="w in parsed.warnings" :key="w">· {{ w }}</div>
         </div>
-        <div class="hint">添加后会在「消息」里生成一条 QQ 单聊，开场白自动成为第一条消息。</div>
+        <div class="hint">添加后会在「消息」里生成一条 单聊，开场白自动成为第一条消息。</div>
       </template>
       <template #footer>
         <button class="btn btn--ghost" @click="preview = false">取消</button>
@@ -417,7 +417,7 @@ function goBack() {
         <input v-model="form.name" class="input" maxlength="24" placeholder="例如：林知夏" />
       </label>
       <label class="field">
-        <span class="field__label">QQ 昵称（可选）</span>
+        <span class="field__label">昵称（可选）</span>
         <input v-model="form.nickname" class="input" maxlength="16" placeholder="聊天列表里显示的名字" />
       </label>
       <label class="field">

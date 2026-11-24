@@ -84,7 +84,7 @@ function goBack() {
     <div class="scroll">
       <template v-if="!q.trim()">
         <div class="hint">
-          可以搜角色名、昵称、签名、标签、QQ 号，<br />也可以直接搜聊天记录里的字。
+          可以搜角色名、昵称、签名、标签、笺号，<br />也可以直接搜聊天记录里的字。
         </div>
       </template>
       <template v-else>

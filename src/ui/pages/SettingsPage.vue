@@ -130,7 +130,7 @@ async function importTheme(e: Event) {
   try {
     const data = JSON.parse(await file.text())
     if (data?.app !== 'qpersona-theme' || !data?.appearance) {
-      throw new Error('不是 Q伴 的主题包')
+      throw new Error('不是 笺页 的主题包')
     }
     const a = data.appearance
     if (data.theme === 'light' || data.theme === 'dark' || data.theme === 'auto') await settings.setTheme(data.theme)
@@ -169,7 +169,7 @@ async function exportData() {
   ])
   const payload = {
     app: 'qpersona',
-    version: '0.16.0',
+    version: '0.17.0',
     exportedAt: new Date().toISOString(),
     characters,
     conversations,
@@ -211,7 +211,7 @@ async function importData(e: Event) {
   if (!file) return
   try {
     const data = JSON.parse(await file.text())
-    if (data?.app !== 'qpersona') throw new Error('不是 Q伴 的备份文件')
+    if (data?.app !== 'qpersona') throw new Error('不是 笺页 的备份文件')
     await db.transaction(
       'rw',
       [db.characters, db.conversations, db.messages, db.memories, db.stickers, db.kv],
@@ -358,7 +358,7 @@ function goBack() {
           <button class="mini-btn" @click="exportTheme">导出主题</button>
           <button class="mini-btn" @click="themeInput?.click()">导入主题</button>
         </div>
-        <div class="hint" style="padding-top: 0">Q伴 主题包（JSON），不是 QQ 主题包。</div>
+        <div class="hint" style="padding-top: 0">笺页 主题包（JSON），不是外部聊天软件的主题包。</div>
       </div>
 
       <div class="group-title">消息</div>
@@ -598,14 +598,14 @@ function goBack() {
       <div class="group-title">关于</div>
       <div class="sheet-block">
         <div class="cell" style="cursor: default">
-          <div class="cell__body"><div class="cell__title">Q伴 / QPersona</div><div class="cell__desc">开源非商业 · 学习与演示用途</div></div>
-          <span class="cell__value">0.16.0</span>
+          <div class="cell__body"><div class="cell__title">笺页 / JianYIE</div><div class="cell__desc">开源非商业 · 学习与演示用途</div></div>
+          <span class="cell__value">0.17.0</span>
         </div>
       </div>
 
       <div class="foot">
         本项目界面风格参考 QQ，相关素材版权归腾讯所有；<br />
-        所有「好友」均为本地 AI 角色，不连接真实 QQ 服务。
+        所有「好友」均为本地 AI 角色，不连接任何真实聊天服务。
       </div>
     </div>
 

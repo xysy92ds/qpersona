@@ -339,7 +339,7 @@ const particleText = computed(() => {
           <div v-if="draft.first_mes" class="quote">「{{ draft.first_mes }}」</div>
         </div>
         <div class="hint" style="text-align: center">
-          保存后会生成一张 V2 角色卡，并自动建一条 QQ 单聊。记忆从零开始。
+          保存后会生成一张 V2 角色卡，并自动建一条 单聊。记忆从零开始。
         </div>
         <div class="foot row">
           <button class="btn btn--ghost" @click="step = 3">再改改</button>

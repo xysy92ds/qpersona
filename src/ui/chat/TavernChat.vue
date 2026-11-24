@@ -175,7 +175,7 @@ onUnmounted(() => {
 
     <BottomSheet v-model="sheet" title="叙事选项">
       <button class="tc-option" @click="switchToQq">
-        <span class="tc-option__title">回到 QQ 里聊</span>
+        <span class="tc-option__title">回到聊天里聊</span>
         <span class="tc-option__desc">同一份记忆，换回短消息语法</span>
       </button>
       <button

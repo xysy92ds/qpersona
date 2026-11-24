@@ -20,7 +20,7 @@
   "cards": [
     {
       "id": "demo-zhixia",
-      "author": "Q伴",
+      "author": "笺页",
       "uploadedAt": 1763827200000,
       "downloads": 128,
       "avatar": "https://example.com/avatar.png",

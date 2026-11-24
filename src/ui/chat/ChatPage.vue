@@ -490,7 +490,7 @@ async function pokeBy(name: string) {
         @click="switchProfile(conv.profile === 'qq' ? 'tavern' : 'qq')"
       >
         <span class="cell__body">
-          <span class="cell__title">{{ conv.profile === 'qq' ? '切到酒馆里继续' : '切回 QQ 聊天' }}</span>
+          <span class="cell__title">{{ conv.profile === 'qq' ? '切到酒馆里继续' : '切回 聊天' }}</span>
           <span class="cell__desc">
             {{ conv.profile === 'qq' ? '同一角色、同一份设定，换一套叙事提示词' : '短消息风格的 QQ 对话' }}
           </span>

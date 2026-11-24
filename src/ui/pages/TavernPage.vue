@@ -28,7 +28,7 @@ async function enter(characterId: string) {
         <div class="intro__body">
           <div class="intro__title">同一个角色，换一套语法</div>
           <div class="intro__text">
-            这里允许长叙述、动作和场景描写。角色卡与 QQ 端共享，切回来时 TA 还记得你们聊过什么。
+            这里允许长叙述、动作和场景描写。角色卡与 短消息端共享，切回来时 TA 还记得你们聊过什么。
           </div>
         </div>
       </div>
