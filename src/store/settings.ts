@@ -65,6 +65,7 @@ interface PersistedSettings {
   proactive: ProactivePlan
   plazaUrl: string
   cloudUrl: string
+  localUpdatedAt: number
   user: AppUser
 }
 
@@ -79,6 +80,7 @@ const DEFAULTS: PersistedSettings = {
   proactive: { enabled: false, probability: 30, minutes: 60, quietEnabled: true, quietStart: 23, quietEnd: 8 },
   plazaUrl: '',
   cloudUrl: 'https://jianyie-api.jianyie.workers.dev',
+  localUpdatedAt: 0,
   user: DEFAULT_USER,
 }
 
@@ -126,6 +128,7 @@ export const useSettingsStore = defineStore('settings', {
       this.proactive = { ...DEFAULTS.proactive, ...(saved.proactive ?? {}) }
       this.plazaUrl = saved.plazaUrl ?? ''
       this.cloudUrl = saved.cloudUrl ?? DEFAULTS.cloudUrl
+      this.localUpdatedAt = saved.localUpdatedAt ?? 0
       this.user = { ...DEFAULT_USER, ...(saved.user ?? {}) }
       this.loaded = true
 
@@ -157,12 +160,31 @@ export const useSettingsStore = defineStore('settings', {
         proactive: { ...this.proactive },
         plazaUrl: this.plazaUrl,
         cloudUrl: this.cloudUrl,
+        localUpdatedAt: this.localUpdatedAt,
         user: { ...this.user },
       }
     },
 
-    async persist() {
+    async persist(touch = true) {
+      if (touch) this.localUpdatedAt = Date.now()
       await kvSet('settings', this.snapshot())
+    },
+
+    /** 从云端恢复个人资料/外观；API Key 和模型绑定保持本机 */
+    async applyCloudSettings(data: any) {
+      if (!data || typeof data !== 'object') return
+      if (data.theme) this.theme = data.theme
+      if (data.flags) this.flags = { ...this.flags, ...data.flags }
+      if (data.appearance) this.appearance = { ...this.appearance, ...data.appearance }
+      if (data.chat) this.chat = { ...this.chat, ...data.chat }
+      if (data.memoryPlan) this.memoryPlan = { ...this.memoryPlan, ...data.memoryPlan }
+      if (data.proactive) this.proactive = { ...this.proactive, ...data.proactive }
+      if (typeof data.plazaUrl === 'string') this.plazaUrl = data.plazaUrl
+      if (typeof data.cloudUrl === 'string') this.cloudUrl = data.cloudUrl
+      if (data.user) this.user = { ...this.user, ...data.user }
+      this.localUpdatedAt = Number(data.localUpdatedAt) || Date.now()
+      this.applyAppearance()
+      await this.persist(false)
     },
 
     applyAppearance() {

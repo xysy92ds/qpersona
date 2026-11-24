@@ -335,7 +335,7 @@ async function pokeBy(name: string) {
         <div class="topbar__sub">{{ subtitle }}</div>
       </div>
       <button
-        v-if="ch && conv.kind === 'single'"
+        v-if="ch && conv.kind === 'single' && !ch.ext.human"
         class="iconbtn"
         aria-label="语音通话"
         @click="ui.openCall(conv.id)"
@@ -343,7 +343,7 @@ async function pokeBy(name: string) {
         <CallOutline />
       </button>
       <button
-        v-else
+        v-else-if="conv.kind === 'group'"
         class="iconbtn"
         aria-label="语音通话"
         @click="showToast('群语音 · 后面做')"

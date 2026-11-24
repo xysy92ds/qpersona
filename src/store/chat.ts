@@ -21,6 +21,7 @@ import { uid, sleep } from '@/core/util'
 import { costOf, estimateTokens, resolvePrice } from '@/core/pricing'
 import { useContactsStore } from './contacts'
 import { useMemoryStore } from './memory'
+import { useHumanStore } from './human'
 import { useSettingsStore } from './settings'
 import { useStickersStore } from './stickers'
 
@@ -119,6 +120,21 @@ export const useChatStore = defineStore('chat', {
       }
       await this.pushLocal(convId, userMsg)
       await contacts.touch(convId, { lastText: text, lastTs: userMsg.ts, unread: 0 })
+
+      const peer = contacts.characterById(conv.characterId)
+      if (peer?.ext.human) {
+        try {
+          await useHumanStore().send(convId, text)
+          userMsg.status = 'ok'
+        } catch (e) {
+          userMsg.status = 'error'
+          userMsg.error = e instanceof Error ? e.message : '发送失败'
+          await putMessage(userMsg)
+          await this.addTip(convId, `消息没发出去：${userMsg.error}`)
+        }
+        return
+      }
+
       await this.dispatchReply(convId, opts)
     },
 
@@ -192,6 +208,13 @@ export const useChatStore = defineStore('chat', {
 
     /** 单聊还是群聊，从这里分流 */
     async dispatchReply(convId: string, opts?: { call?: boolean }) {
+      const peer = useContactsStore().characterById(
+        useContactsStore().conversationById(convId)?.characterId,
+      )
+      if (peer?.ext.human) {
+        await this.addTip(convId, '真人好友暂不支持发图片/文件，先发文字吧。')
+        return
+      }
       if (this.streaming[convId]) {
         this.pendingReply[convId] = true
         return

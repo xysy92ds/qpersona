@@ -37,3 +37,27 @@ CREATE TABLE IF NOT EXISTS plaza_cards (
   status TEXT NOT NULL DEFAULT 'approved',
   created_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS friendships (
+  id TEXT PRIMARY KEY,
+  requester_id TEXT NOT NULL,
+  addressee_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at INTEGER NOT NULL,
+  responded_at INTEGER,
+  UNIQUE(requester_id, addressee_id)
+);
+CREATE INDEX IF NOT EXISTS idx_friends_requester ON friendships(requester_id, status);
+CREATE INDEX IF NOT EXISTS idx_friends_addressee ON friendships(addressee_id, status);
+
+CREATE TABLE IF NOT EXISTS relay_messages (
+  id TEXT PRIMARY KEY,
+  sender_id TEXT NOT NULL,
+  recipient_id TEXT NOT NULL,
+  body TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  delivered_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_relay_recipient ON relay_messages(recipient_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_relay_expiry ON relay_messages(expires_at);

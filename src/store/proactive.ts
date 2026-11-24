@@ -33,6 +33,7 @@ export const useProactiveStore = defineStore('proactive', {
           const ch = contacts.characterById(conv.characterId)
           if (!ch) continue
           if (conv.proactiveMuted) continue
+          if (ch.ext.human) continue
           if (!ch.ext.toggles.chat || ch.ext.toggles.proactive === false) continue
           if (chat.streaming[conv.id]) continue
           if (

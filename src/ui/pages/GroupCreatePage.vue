@@ -12,7 +12,7 @@ const contacts = useContactsStore()
 const selected = ref<string[]>([])
 const title = ref('')
 
-const list = computed(() => contacts.characters)
+const list = computed(() => contacts.characters.filter((c) => !c.ext.human))
 const canCreate = computed(() => selected.value.length >= 2)
 
 function toggle(id: string) {

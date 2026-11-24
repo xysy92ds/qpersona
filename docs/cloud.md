@@ -5,7 +5,7 @@
 - Worker：`https://jianyie-api.jianyie.workers.dev`
 - D1 数据库 `jianyie`（APAC）
 - 账号：用户名 + 密码（用户名唯一、密码 PBKDF2 哈希），游客默认不上传
-- 同步：角色、会话、消息、记忆、表情包，按 `updatedAt` 做增量拉取/推送
+- 同步：角色、会话、消息、记忆、表情包、个人资料/外观，按 `updatedAt` 做增量拉取/推送
 - 清理：Cron 每天 03:00 检查，连续 30 天不活跃的账号只清云端同步数据，账号保留
 - 广场表 `plaza_cards` 独立保存，不随 30 天清理删除
 
@@ -19,6 +19,15 @@ API Key 不参与同步；新设备登录后需要自己重新填模型 Key。
 - 广场卡单独存，不随 30 天清理删除；
 - 前端「添加朋友 → 广场 → 云端广场」可切换并上传本地角色。
 
+## 真人好友
+
+- `POST /api/friends/request` `{username}`：按用户名申请；
+- `GET /api/friends`：好友、收到的申请、发出的申请；
+- `POST /api/friends/accept` `{id}` / `POST /api/friends/reject` `{id}`；
+- `POST /api/dm/send` `{to,text}`：仅好友可发；
+- `GET /api/dm/poll?since=`：拉取 7 天内的中转消息；
+- Cron 每天删除过期的中转消息。
+
 ## API
 
 - `POST /api/auth/register` `{username,password}`
@@ -28,7 +37,9 @@ API Key 不参与同步；新设备登录后需要自己重新填模型 Key。
 - `POST /api/sync/push` `{items:[{kind,id,updatedAt,payload}]}`
 - `GET /api/sync/pull?since=`
 
-`kind` 允许：`characters / conversations / messages / memories / stickers`。
+`kind` 允许：`characters / conversations / messages / memories / stickers / settings`。
+
+真人消息只走中转和本地，不进同步备份。
 
 ## 本地优先规则
 

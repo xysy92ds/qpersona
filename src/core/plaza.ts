@@ -9,6 +9,7 @@ export interface PlazaCard {
   card: CardData
   qq: Partial<PersonaExt['qq']>
   avatar?: string
+  authorId?: string
 }
 
 export type PlazaSort = 'hot' | 'new'
@@ -149,10 +150,20 @@ export async function fetchCloudPlaza(base: string): Promise<PlazaCard[]> {
     ...(item.payload || {}),
     id: item.id,
     author: item.author || '匿名',
+    authorId: item.authorId || '',
     uploadedAt: item.uploadedAt || 0,
     downloads: 0,
   }))
   return normalizePlaza({ cards })
+}
+
+export async function deleteCloudPlaza(base: string, token: string, id: string): Promise<void> {
+  const res = await fetch(`${base.replace(/\/$/, '')}/api/plaza/cards/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || data.ok === false) throw new Error(data.error || `删除失败（HTTP ${res.status}）`)
 }
 
 export async function uploadCloudPlaza(

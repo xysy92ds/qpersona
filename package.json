@@ -1,7 +1,7 @@
 {
   "name": "jianyie",
   "private": true,
-  "version": "0.20.0",
+  "version": "0.21.0",
   "type": "module",
   "description": "笺页 · JianYIE —— 本地优先的 AI 角色聊天客户端",
   "scripts": {

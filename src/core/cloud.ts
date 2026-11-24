@@ -1,4 +1,5 @@
 import { db } from './db'
+import { useSettingsStore } from '@/store/settings'
 import type { Character, Conversation, Memory, Message, Sticker } from './types'
 
 export interface CloudUser {
@@ -7,15 +8,16 @@ export interface CloudUser {
 }
 
 export interface SyncItem {
-  kind: 'characters' | 'conversations' | 'messages' | 'memories' | 'stickers'
+  kind: 'characters' | 'conversations' | 'messages' | 'memories' | 'stickers' | 'settings'
   id: string
   updatedAt: number
   deleted?: boolean
   payload: unknown
 }
 
-const KINDS = ['characters', 'conversations', 'messages', 'memories', 'stickers'] as const
+const KINDS = ['characters', 'conversations', 'messages', 'memories', 'stickers', 'settings'] as const
 export type SyncKind = (typeof KINDS)[number]
+type DbKind = Exclude<SyncKind, 'settings'>
 
 function toPlain<T>(v: T): T {
   return JSON.parse(JSON.stringify(v)) as T
@@ -105,6 +107,7 @@ function stampOf(kind: SyncKind, row: any): number {
   if (kind === 'messages') return Number(row.ts || 0)
   if (kind === 'memories') return Number(row.updatedAt || row.createdAt || 0)
   if (kind === 'stickers') return Number(row.createdAt || 0)
+  if (kind === 'settings') return Number(row.localUpdatedAt || 0)
   return 0
 }
 
@@ -117,17 +120,37 @@ export async function collectLocalItems(): Promise<SyncItem[]> {
     db.stickers.toArray(),
   ])
   const items: SyncItem[] = []
-  const add = (kind: SyncKind, rows: any[]) => {
+  const add = (kind: DbKind, rows: any[]) => {
     for (const row of rows) {
       if (!row?.id) continue
       items.push({ kind, id: String(row.id), updatedAt: stampOf(kind, row), payload: toPlain(row) })
     }
   }
   add('characters', characters)
-  add('conversations', conversations)
-  add('messages', messages)
+  const humanIds = new Set(characters.filter((c) => c.ext?.human).map((c) => c.id))
+  const humanConvIds = new Set(conversations.filter((c) => c.characterId && humanIds.has(c.characterId)).map((c) => c.id))
+  add('conversations', conversations.filter((c) => !humanConvIds.has(c.id)))
+  add('messages', messages.filter((m) => !humanConvIds.has(m.conversationId)))
   add('memories', memories)
   add('stickers', stickers)
+  const settings = useSettingsStore()
+  items.push({
+    kind: 'settings',
+    id: 'settings',
+    updatedAt: settings.localUpdatedAt || 0,
+    payload: {
+      theme: settings.theme,
+      flags: settings.flags,
+      appearance: settings.appearance,
+      chat: settings.chat,
+      memoryPlan: settings.memoryPlan,
+      proactive: settings.proactive,
+      plazaUrl: settings.plazaUrl,
+      cloudUrl: settings.cloudUrl,
+      user: settings.user,
+      localUpdatedAt: settings.localUpdatedAt,
+    },
+  })
   return items
 }
 
@@ -170,7 +193,17 @@ export async function applyRemoteItems(remote: SyncItem[], local: SyncItem[]): P
     byKind[item.kind] = byKind[item.kind] || []
     byKind[item.kind]!.push(item)
   }
-  for (const kind of ['characters', 'conversations', 'messages', 'memories', 'stickers'] as SyncKind[]) {
+  const settingsRows = byKind.settings || []
+  if (settingsRows.length) {
+    const settings = useSettingsStore()
+    for (const item of settingsRows) {
+      if (!item.deleted && item.payload) {
+        await settings.applyCloudSettings(item.payload)
+        applied++
+      }
+    }
+  }
+  for (const kind of ['characters', 'conversations', 'messages', 'memories', 'stickers'] as DbKind[]) {
     const rows = byKind[kind] || []
     if (!rows.length) continue
     await db.transaction('rw', db[kind], async () => {

@@ -4,6 +4,7 @@ import { useCloudStore } from './cloud'
 import { useSettingsStore } from './settings'
 import {
   extForPlaza,
+  deleteCloudPlaza,
   fetchCloudPlaza,
   normalizePlaza,
   searchPlaza,
@@ -78,6 +79,14 @@ export const usePlazaStore = defineStore('plaza', {
       await uploadCloudPlaza(settings.cloudUrl, cloud.token, ch.card, ch.ext.qq, ch.ext.qq.avatar)
       this.mode = 'cloud'
       this.loaded = false
+      await this.load(true)
+    },
+
+    async removeCloudCard(item: PlazaCard): Promise<void> {
+      const settings = useSettingsStore()
+      const cloud = useCloudStore()
+      if (!cloud.loggedIn || !item.authorId || cloud.user?.id !== item.authorId) throw new Error('只能删除自己上传的卡')
+      await deleteCloudPlaza(settings.cloudUrl, cloud.token, item.id)
       await this.load(true)
     },
 

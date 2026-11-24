@@ -111,9 +111,11 @@ export interface PersonaExt {
     /** 该角色是否允许主动消息（全局开关打开时生效） */
     proactive?: boolean
   }
-  origin: 'import' | 'custom' | 'distill' | 'demo'
+  origin: 'import' | 'custom' | 'distill' | 'demo' | 'human'
   /** 蒸馏得到的可量化语感统计，供角色页展示 */
   stats?: Record<string, unknown>
+  /** 真人好友：云端账号 ID 与用户名 */
+  human?: { userId: string; username: string }
 }
 
 export interface Character {

@@ -228,6 +228,125 @@ async function deletePlaza(req, env, user, id) {
   return json(req, { ok: true })
 }
 
+
+async function friendsList(req, env, user) {
+  const rows = await env.DB.prepare(
+    `SELECT f.id, f.requester_id, f.addressee_id, f.status, f.created_at,
+            u.id AS peer_id, u.username AS peer_name
+     FROM friendships f
+     JOIN users u ON u.id = CASE WHEN f.requester_id = ? THEN f.addressee_id ELSE f.requester_id END
+     WHERE f.requester_id = ? OR f.addressee_id = ?
+     ORDER BY f.created_at DESC`
+  ).bind(user.id, user.id, user.id).all()
+  const friends = [], incoming = [], outgoing = []
+  for (const r of rows.results || []) {
+    const item = {
+      id: r.id,
+      status: r.status,
+      peer: { id: r.peer_id, username: r.peer_name },
+      direction: r.requester_id === user.id ? 'out' : 'in',
+      createdAt: r.created_at,
+    }
+    if (r.status === 'accepted') friends.push(item)
+    else if (r.status === 'pending' && item.direction === 'in') incoming.push(item)
+    else if (r.status === 'pending') outgoing.push(item)
+  }
+  return json(req, { ok: true, friends, incoming, outgoing })
+}
+
+async function friendRequest(req, env, user) {
+  const body = await readJSON(req)
+  const name = String(body.username || '').trim().toLowerCase()
+  if (!name) return err(req, '填对方用户名')
+  const target = await env.DB.prepare('SELECT id, username FROM users WHERE username_lower = ?').bind(name).first()
+  if (!target) return err(req, '找不到这个用户', 404)
+  if (target.id === user.id) return err(req, '不能加自己')
+  const existing = await env.DB.prepare(
+    `SELECT * FROM friendships WHERE (requester_id = ? AND addressee_id = ?) OR (requester_id = ? AND addressee_id = ?)`
+  ).bind(user.id, target.id, target.id, user.id).first()
+  if (existing?.status === 'accepted') return err(req, '你们已经是好友了', 409)
+  if (existing?.status === 'pending') {
+    if (existing.requester_id === target.id && existing.addressee_id === user.id) {
+      await env.DB.prepare("UPDATE friendships SET status='accepted', responded_at=? WHERE id=?").bind(Date.now(), existing.id).run()
+      return json(req, { ok: true, accepted: true, friendshipId: existing.id })
+    }
+    return err(req, '已经发过请求了，等对方处理', 409)
+  }
+  const id = crypto.randomUUID()
+  await env.DB.prepare("INSERT INTO friendships (id, requester_id, addressee_id, status, created_at) VALUES (?, ?, ?, 'pending', ?)")
+    .bind(id, user.id, target.id, Date.now()).run()
+  return json(req, { ok: true, friendshipId: id })
+}
+
+async function friendAccept(req, env, user) {
+  const body = await readJSON(req)
+  const id = String(body.id || '')
+  const row = await env.DB.prepare("SELECT * FROM friendships WHERE id=? AND addressee_id=? AND status='pending'").bind(id, user.id).first()
+  if (!row) return err(req, '没有这个待处理请求', 404)
+  await env.DB.prepare("UPDATE friendships SET status='accepted', responded_at=? WHERE id=?").bind(Date.now(), id).run()
+  return json(req, { ok: true })
+}
+
+async function friendReject(req, env, user) {
+  const body = await readJSON(req)
+  const id = String(body.id || '')
+  const row = await env.DB.prepare("SELECT * FROM friendships WHERE id=? AND addressee_id=? AND status='pending'").bind(id, user.id).first()
+  if (!row) return err(req, '没有这个待处理请求', 404)
+  await env.DB.prepare("DELETE FROM friendships WHERE id=?").bind(id).run()
+  return json(req, { ok: true })
+}
+
+async function areFriends(env, a, b) {
+  const row = await env.DB.prepare(
+    "SELECT id FROM friendships WHERE status='accepted' AND ((requester_id=? AND addressee_id=?) OR (requester_id=? AND addressee_id=?))"
+  ).bind(a, b, b, a).first()
+  return !!row
+}
+
+async function dmSend(req, env, user) {
+  const body = await readJSON(req)
+  const to = String(body.to || '')
+  const text = String(body.text || '').trim()
+  if (!to || !text) return err(req, '消息为空')
+  if (text.length > 4000) return err(req, '消息太长')
+  if (!(await areFriends(env, user.id, to))) return err(req, '还不是好友', 403)
+  const id = crypto.randomUUID()
+  const now = Date.now()
+  await env.DB.prepare('INSERT INTO relay_messages (id, sender_id, recipient_id, body, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(id, user.id, to, text, now, now + 7 * 86400000).run()
+  return json(req, { ok: true, id, createdAt: now, expiresAt: now + 7 * 86400000 })
+}
+
+async function dmPoll(req, env, user) {
+  const url = new URL(req.url)
+  const since = Math.max(0, Number(url.searchParams.get('since')) || 0)
+  const now = Date.now()
+  const rows = await env.DB.prepare(
+    `SELECT m.id, m.sender_id, m.body, m.created_at, m.expires_at, u.username AS sender_name
+     FROM relay_messages m JOIN users u ON u.id = m.sender_id
+     WHERE m.recipient_id = ? AND m.created_at > ? AND m.expires_at > ?
+     ORDER BY m.created_at ASC LIMIT 200`
+  ).bind(user.id, since, now).all()
+  const items = (rows.results || []).map((r) => ({
+    id: r.id, senderId: r.sender_id, senderName: r.sender_name, text: r.body, createdAt: r.created_at, expiresAt: r.expires_at,
+  }))
+  if (items.length) {
+    const ids = items.map((i) => i.id)
+    for (let i = 0; i < ids.length; i += 50) {
+      const chunk = ids.slice(i, i + 50)
+      const placeholders = chunk.map(() => '?').join(',')
+      await env.DB.prepare(`UPDATE relay_messages SET delivered_at = COALESCE(delivered_at, ?) WHERE id IN (${placeholders})`).bind(now, ...chunk).run()
+    }
+  }
+  return json(req, { ok: true, items, now })
+}
+
+async function plazaMine(req, env, user) {
+  const rows = await env.DB.prepare('SELECT id, payload, status, created_at FROM plaza_cards WHERE author_id = ? ORDER BY created_at DESC LIMIT 50')
+    .bind(user.id).all()
+  return json(req, { ok: true, items: (rows.results || []).map((r) => ({ id: r.id, payload: safeParse(r.payload), status: r.status, createdAt: r.created_at })) })
+}
+
 async function cleanup(env) {
   const now = Date.now()
   const cutoff = now - INACTIVE_DAYS * 86400000
@@ -239,6 +358,7 @@ async function cleanup(env) {
       await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id).run()
     }
   }
+  await env.DB.prepare('DELETE FROM relay_messages WHERE expires_at < ?').bind(now).run()
   await env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(now).run()
   return ids.length
 }
@@ -270,6 +390,13 @@ export default {
       if (path === '/api/auth/logout' && req.method === 'POST') return logout(req, env)
       const user = await currentUser(req, env)
       if (path === '/api/me') return user ? me(req, env, user) : err(req, '未登录', 401)
+      if (path === '/api/friends' && req.method === 'GET') return user ? friendsList(req, env, user) : err(req, '未登录', 401)
+      if (path === '/api/friends/request' && req.method === 'POST') return user ? friendRequest(req, env, user) : err(req, '未登录', 401)
+      if (path === '/api/friends/accept' && req.method === 'POST') return user ? friendAccept(req, env, user) : err(req, '未登录', 401)
+      if (path === '/api/friends/reject' && req.method === 'POST') return user ? friendReject(req, env, user) : err(req, '未登录', 401)
+      if (path === '/api/dm/send' && req.method === 'POST') return user ? dmSend(req, env, user) : err(req, '未登录', 401)
+      if (path === '/api/dm/poll' && req.method === 'GET') return user ? dmPoll(req, env, user) : err(req, '未登录', 401)
+      if (path === '/api/plaza/mine' && req.method === 'GET') return user ? plazaMine(req, env, user) : err(req, '未登录', 401)
       if (path === '/api/sync/push' && req.method === 'POST') return user ? push(req, env, user) : err(req, '未登录', 401)
       if (path === '/api/sync/pull' && req.method === 'GET') return user ? pull(req, env, user) : err(req, '未登录', 401)
       return err(req, 'not found', 404)

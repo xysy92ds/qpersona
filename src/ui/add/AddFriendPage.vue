@@ -17,6 +17,7 @@ import {
 } from '@vicons/ionicons5'
 import BottomSheet from '@/ui/common/BottomSheet.vue'
 import Avatar from '@/ui/common/Avatar.vue'
+import HumanFriends from './HumanFriends.vue'
 import { parseCardFile, buildCustomCard, type ParsedCard } from '@/core/card'
 import { imageToDataUrl } from '@/core/util'
 import { useContactsStore } from '@/store/contacts'
@@ -41,7 +42,7 @@ const parsing = ref(false)
 const parsed = ref<ParsedCard | null>(null)
 const preview = ref(false)
 const createOpen = ref(false)
-const tab = ref<'add' | 'plaza'>('add')
+const tab = ref<'add' | 'plaza' | 'human'>('add')
 const plazaPreview = ref<PlazaCard | null>(null)
 const plazaBusy = ref(false)
 const plazaSettings = ref(false)
@@ -138,6 +139,7 @@ async function createCharacter() {
 
 onMounted(() => {
   if (route.query.tab === 'plaza') openPlaza()
+  if (route.query.tab === 'human') tab.value = 'human'
   const action = String(route.query.action || '')
   if (action === 'create') createOpen.value = true
   if (action === 'import') window.setTimeout(() => fileInput.value?.click(), 260)
@@ -177,6 +179,17 @@ async function uploadCharacter(c: Character) {
     showToast(e instanceof Error ? e.message : '上传失败', 3500)
   } finally {
     uploadBusy.value = false
+  }
+}
+
+async function removePlaza() {
+  if (!plazaPreview.value) return
+  try {
+    await plaza.removeCloudCard(plazaPreview.value)
+    plazaPreview.value = null
+    showToast('已从云端广场删除')
+  } catch (e) {
+    showToast(e instanceof Error ? e.message : '删除失败')
   }
 }
 
@@ -227,6 +240,7 @@ function goBack() {
       <div class="tabs">
         <button class="tabs__btn" :class="{ on: tab === 'add' }" @click="tab = 'add'">添加</button>
         <button class="tabs__btn" :class="{ on: tab === 'plaza' }" @click="openPlaza">广场</button>
+        <button class="tabs__btn" :class="{ on: tab === 'human' }" @click="tab = 'human'">真人</button>
       </div>
 
       <template v-if="tab === 'add'">
@@ -277,7 +291,7 @@ function goBack() {
       </div>
       </template>
 
-      <template v-else>
+      <template v-else-if="tab === 'plaza'">
         <div class="plaza-search">
           <SearchOutline />
           <input v-model="plaza.query" placeholder="搜角色、标签、作者" />
@@ -343,8 +357,12 @@ function goBack() {
 
         <div class="hint">
           <GlobeOutline style="width: 13px; height: 13px; vertical-align: -2px" />
-          广场读的是一份静态 JSON；别人上传需要维护者合并或自己的地址，详见 docs/plaza.md。
+          云端广场由登录用户上传；示例广场读静态 JSON。
         </div>
+      </template>
+
+      <template v-else>
+        <HumanFriends />
       </template>
     </div>
 
@@ -398,6 +416,11 @@ function goBack() {
         <div class="hint">第三方角色卡，设定和提示词由作者提供；添加前自己看一眼。</div>
       </template>
       <template #footer>
+        <button
+          v-if="plazaPreview?.authorId && cloud.user?.id === plazaPreview.authorId"
+          class="btn btn--ghost"
+          @click="removePlaza"
+        >删除</button>
         <button class="btn btn--ghost" @click="plazaPreview = null">取消</button>
         <button class="btn" :disabled="plazaBusy" @click="importPlaza">{{ plazaBusy ? '添加中…' : '添加为好友' }}</button>
       </template>
