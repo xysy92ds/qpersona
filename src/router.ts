@@ -17,6 +17,7 @@ import GroupInfoPage from '@/ui/pages/GroupInfoPage.vue'
 import DistillPage from '@/ui/pages/DistillPage.vue'
 import MemoryPage from '@/ui/pages/MemoryPage.vue'
 import DashboardPage from '@/ui/pages/DashboardPage.vue'
+import CloudPage from '@/ui/pages/CloudPage.vue'
 
 /**
  * 用 hash 路由：静态部署到任何地方（GitHub Pages / 本地文件）都不会 404，
@@ -29,6 +30,7 @@ export const router = createRouter({
     { path: '/contacts', name: 'contacts', component: ContactsPage },
     { path: '/me', name: 'me', component: MePage },
     { path: '/dashboard', name: 'dashboard', component: DashboardPage },
+    { path: '/cloud', name: 'cloud', component: CloudPage },
     { path: '/chat/:id', name: 'chat', component: ChatRoute, props: true },
     { path: '/add', name: 'add', component: AddFriendPage },
     { path: '/search', name: 'search', component: SearchPage },

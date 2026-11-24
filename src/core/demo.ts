@@ -28,7 +28,7 @@ const demoCard: CardData = {
 }
 
 export function makeDemoCharacter(): Character {
-  const ext = emptyExt(demoCard.name, 'custom')
+  const ext = emptyExt(demoCard.name, 'demo')
   ext.qq.qqNumber = '21730418'
   ext.qq.nickname = '知夏'
   ext.qq.signature = '书店打烊了，猫还在营业'

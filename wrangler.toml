@@ -1,0 +1,11 @@
+name = "jianyie-api"
+main = "server/worker.js"
+compatibility_date = "2026-11-20"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "jianyie"
+database_id = "fb03f981-9bf9-474a-9202-a3c961b04156"
+
+[triggers]
+crons = ["0 3 * * *"]

@@ -64,6 +64,7 @@ interface PersistedSettings {
   memoryPlan: MemoryPlan
   proactive: ProactivePlan
   plazaUrl: string
+  cloudUrl: string
   user: AppUser
 }
 
@@ -77,6 +78,7 @@ const DEFAULTS: PersistedSettings = {
   memoryPlan: { mode: 'messages', every: 40, minutes: 120 },
   proactive: { enabled: false, probability: 30, minutes: 60, quietEnabled: true, quietStart: 23, quietEnd: 8 },
   plazaUrl: '',
+  cloudUrl: 'https://jianyie-api.jianyie.workers.dev',
   user: DEFAULT_USER,
 }
 
@@ -123,6 +125,7 @@ export const useSettingsStore = defineStore('settings', {
       this.memoryPlan = { ...DEFAULTS.memoryPlan, ...(saved.memoryPlan ?? {}) }
       this.proactive = { ...DEFAULTS.proactive, ...(saved.proactive ?? {}) }
       this.plazaUrl = saved.plazaUrl ?? ''
+      this.cloudUrl = saved.cloudUrl ?? DEFAULTS.cloudUrl
       this.user = { ...DEFAULT_USER, ...(saved.user ?? {}) }
       this.loaded = true
 
@@ -153,6 +156,7 @@ export const useSettingsStore = defineStore('settings', {
         memoryPlan: { ...this.memoryPlan },
         proactive: { ...this.proactive },
         plazaUrl: this.plazaUrl,
+        cloudUrl: this.cloudUrl,
         user: { ...this.user },
       }
     },
@@ -219,6 +223,11 @@ export const useSettingsStore = defineStore('settings', {
 
     async setPlazaUrl(url: string) {
       this.plazaUrl = url.trim()
+      await this.persist()
+    },
+
+    async setCloudUrl(url: string) {
+      this.cloudUrl = url.trim() || DEFAULTS.cloudUrl
       await this.persist()
     },
 
