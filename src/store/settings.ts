@@ -79,7 +79,7 @@ const DEFAULTS: PersistedSettings = {
   memoryPlan: { mode: 'messages', every: 40, minutes: 120 },
   proactive: { enabled: false, probability: 30, minutes: 60, quietEnabled: true, quietStart: 23, quietEnd: 8 },
   plazaUrl: '',
-  cloudUrl: 'https://jianyie-api.jianyie.workers.dev',
+  cloudUrl: 'https://jianyie.pages.dev',
   localUpdatedAt: 0,
   user: DEFAULT_USER,
 }
@@ -127,7 +127,10 @@ export const useSettingsStore = defineStore('settings', {
       this.memoryPlan = { ...DEFAULTS.memoryPlan, ...(saved.memoryPlan ?? {}) }
       this.proactive = { ...DEFAULTS.proactive, ...(saved.proactive ?? {}) }
       this.plazaUrl = saved.plazaUrl ?? ''
-      this.cloudUrl = saved.cloudUrl ?? DEFAULTS.cloudUrl
+      const savedCloud = (saved.cloudUrl || '').trim()
+      this.cloudUrl = !savedCloud || savedCloud.includes('jianyie-api.jianyie.workers.dev')
+        ? DEFAULTS.cloudUrl
+        : savedCloud
       this.localUpdatedAt = saved.localUpdatedAt ?? 0
       this.user = { ...DEFAULT_USER, ...(saved.user ?? {}) }
       this.loaded = true

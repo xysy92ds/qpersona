@@ -128,7 +128,7 @@ function goBack() {
 
       <button class="link" @click="showServer = !showServer">服务器地址</button>
       <div v-if="showServer" class="server">
-        <input v-model="serverDraft" class="input" placeholder="https://jianyie-api.jianyie.workers.dev" />
+        <input v-model="serverDraft" class="input" placeholder="https://jianyie.pages.dev" />
         <button class="mini" @click="saveServer">保存</button>
       </div>
 

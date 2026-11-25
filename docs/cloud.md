@@ -2,7 +2,9 @@
 
 ## 现在有什么
 
-- Worker：`https://jianyie-api.jianyie.workers.dev`
+- API：`https://jianyie.pages.dev/api`（Pages 高级模式代理到 Worker）
+
+Worker 直连：`https://jianyie-api.jianyie.workers.dev`（仅内部/备用）
 - D1 数据库 `jianyie`（APAC）
 - 账号：用户名 + 密码（用户名唯一、密码 PBKDF2 哈希），游客默认不上传
 - 同步：角色、会话、消息、记忆、表情包、个人资料/外观、模型方案（不含 Key），按 `updatedAt` 做增量拉取/推送
