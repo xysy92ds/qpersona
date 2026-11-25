@@ -130,7 +130,7 @@ export function buildSystemPrompt(
   return base
 }
 
-const HISTORY_LIMIT: Record<ContextProfileId, number> = { qq: 40, tavern: 60 }
+const HISTORY_LIMIT: Record<ContextProfileId, number> = { qq: 24, tavern: 50 }
 
 /** 把非纯文本消息翻译成模型能读懂的一行，避免表情包/文件在历史里变成空白 */
 export function historyText(m: Message): string {

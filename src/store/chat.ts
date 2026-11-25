@@ -337,7 +337,7 @@ export const useChatStore = defineStore('chat', {
       const list = this.byConv[convId] ?? []
       const members = (conv.memberIds ?? [])
         .map((id) => contacts.characterById(id))
-        .filter((c): c is Character => !!c && c.ext.toggles.chat && !conv.groupMuted?.[c.id])
+        .filter((c): c is Character => !!c && !c.ext.human && c.ext.toggles.chat && !conv.groupMuted?.[c.id])
       if (!members.length) return
 
       const now = Date.now()
@@ -505,6 +505,7 @@ export const useChatStore = defineStore('chat', {
       try {
         memoryText = await memory.recall(ch.id, query, {
           includePrivate: conv.groupMemoryShare !== false,
+          limit: 4,
         })
       } catch {
         memoryText = ''
@@ -744,7 +745,7 @@ export const useChatStore = defineStore('chat', {
         .join(' ')
       let memoryText = ''
       try {
-        memoryText = await memory.recall(ch.id, recentQuery)
+        memoryText = await memory.recall(ch.id, recentQuery, { limit: conv.profile === 'tavern' ? 7 : 4 })
       } catch {
         memoryText = ''
       }

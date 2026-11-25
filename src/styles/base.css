@@ -709,3 +709,37 @@ a {
   background: var(--line-2);
   margin: 8px auto 0;
 }
+
+/* ============ 桌面窗口 ============ */
+@media (min-width: 900px) {
+  body:has(.phone.desktop-chat) {
+    padding: 0;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  body:has(.phone.desktop-chat) #app {
+    padding: 0;
+  }
+  .phone.desktop-chat {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    width: 100vw;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .phone.desktop-chat .phone-body {
+    grid-column: 2;
+    grid-row: 1;
+    height: 100dvh;
+  }
+  .phone.desktop-chat .desk-side {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .phone.desktop-chat .chat-list {
+    padding-left: max(24px, calc((100% - 960px) / 2));
+    padding-right: max(24px, calc((100% - 960px) / 2));
+  }
+}

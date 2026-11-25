@@ -131,7 +131,7 @@ onMounted(async () => {
         <button class="cell" @click="about = true">
           <div class="cell-icon" style="background: #94a3b8"><InformationCircleOutline /></div>
           <div class="cell__body"><div class="cell__title">关于 笺页</div></div>
-          <span class="cell__value">0.21.6</span>
+          <span class="cell__value">0.22.0</span>
           <ChevronForward class="chev" />
         </button>
       </div>
@@ -142,7 +142,7 @@ onMounted(async () => {
     <BottomSheet v-model="about" title="关于 笺页">
       <div class="about">
         <div class="about__logo">笺</div>
-        <div class="about__name">笺页 / JianYIE 0.21.6</div>
+        <div class="about__name">笺页 / JianYIE 0.22.0</div>
         <p>
           本地优先的 AI 角色聊天应用。<br />
           角色卡、聊天记录、记忆和外观都保存在本机；可以导入角色卡、从零创建，或用聊天记录培养一个角色。<br />

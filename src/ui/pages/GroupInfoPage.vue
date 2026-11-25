@@ -23,13 +23,15 @@ const conv = computed(() => contacts.conversationById(props.id))
 const members = computed(() =>
   (conv.value?.memberIds ?? [])
     .map((id) => contacts.characterById(id))
-    .filter((m): m is NonNullable<typeof m> => !!m),
+    .filter((m): m is NonNullable<typeof m> => !!m && !m.ext.human),
 )
 
 const title = ref(conv.value?.title ?? '')
 const avatar = ref(conv.value?.avatar ?? '')
 const activeMinutes = ref(conv.value?.groupActiveMinutes ?? 5)
-const memberIds = ref<string[]>([...(conv.value?.memberIds ?? [])])
+const memberIds = ref<string[]>(
+  (conv.value?.memberIds ?? []).filter((id) => !contacts.characterById(id)?.ext.human),
+)
 const memoryShare = ref(conv.value?.groupMemoryShare !== false)
 const isolation = ref(conv.value?.groupIsolation === true)
 const muted = ref<Record<string, boolean>>({ ...(conv.value?.groupMuted ?? {}) })

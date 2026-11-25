@@ -120,7 +120,7 @@ function onTouchEnd() {
           <button class="drawer-mode" @click="settings.toggleTheme()">
             <MoonOutline /> {{ settings.isDark ? '切到浅色' : '夜间模式' }}
           </button>
-          <span class="drawer-ver">笺页 0.21.6</span>
+          <span class="drawer-ver">笺页 0.22.0</span>
         </div>
         <div class="drawer-hint">向左滑动关闭</div>
       </aside>

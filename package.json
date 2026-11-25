@@ -1,7 +1,7 @@
 {
   "name": "jianyie",
   "private": true,
-  "version": "0.21.6",
+  "version": "0.22.0",
   "type": "module",
   "description": "笺页 · JianYIE —— 本地优先的 AI 角色聊天客户端",
   "scripts": {
@@ -18,6 +18,9 @@
     "@capacitor-community/speech-recognition": "^7.0.1",
     "@capacitor/android": "^8.6.2",
     "@capacitor/core": "^8.6.2",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/local-notifications": "^8.3.1",
+    "@capacitor/share": "^8.0.3",
     "@capacitor/status-bar": "^8.0.4",
     "@vicons/ionicons5": "^0.13.0",
     "dexie": "^4.4.0",

@@ -17,6 +17,15 @@ importers:
       '@capacitor/core':
         specifier: ^8.6.2
         version: 8.6.2
+      '@capacitor/filesystem':
+        specifier: ^8.1.5
+        version: 8.1.5(@capacitor/core@8.6.2)
+      '@capacitor/local-notifications':
+        specifier: ^8.3.1
+        version: 8.3.1(@capacitor/core@8.6.2)
+      '@capacitor/share':
+        specifier: ^8.0.3
+        version: 8.0.3(@capacitor/core@8.6.2)
       '@capacitor/status-bar':
         specifier: ^8.0.4
         version: 8.0.4(@capacitor/core@8.6.2)
@@ -110,10 +119,28 @@ packages:
   '@capacitor/core@8.6.2':
     resolution: {integrity: sha512-UEb9crRuqEAe2Iu2eGOEuQ8rLQxpwg7ZZIpl17UJoytEpnV1e4oXXW0K7yYS2NsCOGmJjyLeKjNlgG7tkAoX8g==}
 
+  '@capacitor/filesystem@8.1.5':
+    resolution: {integrity: sha512-m1RkI8L83NJeppEKyRWioK3MDp2vjlA+QfUQcF8/xRlcXNC2HYxqoyYJ+K4M0EcVovy+g+4F24S05+bhK4Vgdg==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+
+  '@capacitor/local-notifications@8.3.1':
+    resolution: {integrity: sha512-F7zu/+p/mIR958YP4axOkeI5hBKRaXDyYjbNPrAil2wWfd7OxScPSTvP9t85NpQ0eULVRu0/sntoxOg6ck477A==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+
+  '@capacitor/share@8.0.3':
+    resolution: {integrity: sha512-gnvZBV1NPu2B8vd1UKncR56G15ueHd0aZLqgDov++t3SmTBG9Q0VrAZ1VnHn5stxlmglVaTb4RwopMgbpLzroA==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+
   '@capacitor/status-bar@8.0.4':
     resolution: {integrity: sha512-ZMzBUyHBzwDUxcHadEhvOvmoPmMQGMZgaMRJu8ohELeI6IaxoVH9ZhdF/OHnY3/yykv3Glev8Tnbh4aZY/0B0w==}
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
+
+  '@capacitor/synapse@1.0.4':
+    resolution: {integrity: sha512-/C1FUo8/OkKuAT4nCIu/34ny9siNHr9qtFezu4kxm6GY1wNFxrCFWjfYx5C1tUhVGz3fxBABegupkpjXvjCHrw==}
 
   '@cloudflare/kv-asset-handler@0.5.1':
     resolution: {integrity: sha512-48OysfSW3MkQY1XjkhkpPkgrEkOvgfoyHzA2eyX5wpzFpijC02uWigv3hkNdJdT3C7ybW/U17yYHXeR68pLeww==}
@@ -1595,9 +1622,24 @@ snapshots:
     dependencies:
       tslib: 2.9.1
 
+  '@capacitor/filesystem@8.1.5(@capacitor/core@8.6.2)':
+    dependencies:
+      '@capacitor/core': 8.6.2
+      '@capacitor/synapse': 1.0.4
+
+  '@capacitor/local-notifications@8.3.1(@capacitor/core@8.6.2)':
+    dependencies:
+      '@capacitor/core': 8.6.2
+
+  '@capacitor/share@8.0.3(@capacitor/core@8.6.2)':
+    dependencies:
+      '@capacitor/core': 8.6.2
+
   '@capacitor/status-bar@8.0.4(@capacitor/core@8.6.2)':
     dependencies:
       '@capacitor/core': 8.6.2
+
+  '@capacitor/synapse@1.0.4': {}
 
   '@cloudflare/kv-asset-handler@0.5.1': {}
 

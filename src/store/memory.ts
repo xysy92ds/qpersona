@@ -176,7 +176,7 @@ export const useMemoryStore = defineStore('memory', {
     async recall(
       characterId: string,
       query: string,
-      opts: { includePrivate?: boolean } = {},
+      opts: { includePrivate?: boolean; limit?: number } = {},
     ): Promise<string> {
       const all = (await db.memories.where('characterId').equals(characterId).toArray()).filter(
         (m) => (opts.includePrivate === false ? m.source === 'group' : true),
@@ -201,7 +201,7 @@ export const useMemoryStore = defineStore('memory', {
       })
 
       scored.sort((a, b) => b.score - a.score)
-      const top = scored.filter((s) => s.score >= 1.1).slice(0, 7)
+      const top = scored.filter((s) => s.score >= 1.1).slice(0, Math.max(1, opts.limit ?? 7))
       if (!top.length) return ''
 
       return top

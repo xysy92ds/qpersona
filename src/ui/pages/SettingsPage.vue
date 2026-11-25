@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { Capacitor } from '@capacitor/core'
+import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
+import { Share } from '@capacitor/share'
 import { useRouter } from 'vue-router'
 import {
   ChatbubblesOutline,
@@ -169,7 +172,7 @@ async function exportData() {
   ])
   const payload = {
     app: 'qpersona',
-    version: '0.21.6',
+    version: '0.22.0',
     exportedAt: new Date().toISOString(),
     characters,
     conversations,
@@ -184,14 +187,36 @@ async function exportData() {
       })),
     },
   }
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  const json = JSON.stringify(payload, null, 2)
+  const fileName = `jianyie-backup-${new Date().toISOString().slice(0, 10)}.json`
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const saved = await Filesystem.writeFile({
+        path: `backups/${fileName}`,
+        data: json,
+        directory: Directory.Documents,
+        encoding: Encoding.UTF8,
+        recursive: true,
+      })
+      try {
+        await Share.share({ title: '笺页备份', text: '选择「保存到文件」即可放到下载目录', url: saved.uri })
+      } catch {
+        /* 用户取消分享，文件仍在应用文档目录 */
+      }
+      showToast(`备份已写入应用文档：backups/${fileName}`, 4200)
+    } catch (e) {
+      showToast(`导出失败：${e instanceof Error ? e.message : String(e)}`, 3500)
+    }
+    return
+  }
+  const blob = new Blob([json], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `qpersona-backup-${new Date().toISOString().slice(0, 10)}.json`
+  a.download = fileName
   a.click()
   setTimeout(() => URL.revokeObjectURL(url), 4000)
-  showToast(includeKeys.value ? '已导出完整备份（包含 API Key，别发给别人）' : '已导出备份（不含 API Key，其余设置和背景都在）', 3200)
+  showToast(includeKeys.value ? '已下载完整备份（包含 API Key，别发给别人）' : '已下载备份（不含 API Key，其余设置和背景都在）', 3200)
 }
 
 function pickImport() {
@@ -599,7 +624,7 @@ function goBack() {
       <div class="sheet-block">
         <div class="cell" style="cursor: default">
           <div class="cell__body"><div class="cell__title">笺页 / JianYIE</div><div class="cell__desc">开源非商业 · 学习与演示用途</div></div>
-          <span class="cell__value">0.21.6</span>
+          <span class="cell__value">0.22.0</span>
         </div>
       </div>
 
@@ -612,7 +637,7 @@ function goBack() {
     <BottomSheet v-model="exportOpen" title="导出备份">
       <div class="hint" style="margin-bottom: 10px">
         包含角色卡、聊天记录、记忆、表情包、外观设置、聊天背景、个人资料、角色头像和主页背景。
-        API Key 默认不导出，导入后重新填一次即可。
+        API Key 默认不导出，导入后重新填一次即可。Android 版会打开系统分享，可保存到「文件/下载」。
       </div>
       <button class="cell" @click="includeKeys = !includeKeys">
         <div class="cell__body">

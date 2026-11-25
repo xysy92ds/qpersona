@@ -90,7 +90,7 @@ const membersOpen = ref(false)
 const members = computed(() =>
   (conv.value?.memberIds ?? [])
     .map((id) => contacts.characterById(id))
-    .filter((m): m is NonNullable<typeof m> => !!m),
+    .filter((m): m is NonNullable<typeof m> => !!m && !m.ext.human),
 )
 
 const mentionNames = computed(() =>

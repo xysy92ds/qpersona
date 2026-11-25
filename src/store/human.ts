@@ -1,4 +1,6 @@
 import { defineStore } from 'pinia'
+import { Capacitor } from '@capacitor/core'
+import { LocalNotifications } from '@capacitor/local-notifications'
 import { db, putMessage } from '@/core/db'
 import {
   acceptFriend,
@@ -109,6 +111,7 @@ export const useHumanStore = defineStore('human', {
         const res = await pollDirect(settings.cloudUrl, cloud.token, since)
         let added = 0
         const convIds = new Set<string>()
+        const notices: { id: number; title: string; body: string }[] = []
         for (const item of res.items || []) {
           const mid = `dm_${item.id}`
           if (await db.messages.get(mid)) continue
@@ -131,10 +134,33 @@ export const useHumanStore = defineStore('human', {
           })
           convIds.add(conv.id)
           added++
+          if (!viewing) {
+            let hash = 0
+            for (const ch of mid) hash = (hash * 31 + ch.charCodeAt(0)) | 0
+            notices.push({
+              id: Math.abs(hash) || Date.now() % 2147483647,
+              title: item.senderName,
+              body: item.text.slice(0, 120),
+            })
+          }
         }
         localStorage.setItem(key, String(res.now))
         if (added) {
           window.dispatchEvent(new CustomEvent('jianyie:dm', { detail: { conversationIds: [...convIds] } }))
+          if (Capacitor.isNativePlatform() && notices.length) {
+            try {
+              await LocalNotifications.schedule({
+                notifications: notices.map((n) => ({
+                  id: n.id,
+                  title: n.title,
+                  body: n.body,
+                  schedule: { at: new Date(Date.now() + 300) },
+                })),
+              })
+            } catch {
+              /* 权限被拒或系统限制 */
+            }
+          }
         }
         return added
       } finally {

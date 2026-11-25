@@ -7,7 +7,7 @@ import { useContactsStore } from '@/store/contacts'
 
 const router = useRouter()
 const contacts = useContactsStore()
-const list = computed(() => contacts.characters)
+const list = computed(() => contacts.characters.filter((c) => !c.ext.human))
 
 async function enter(characterId: string) {
   const conv = await contacts.ensureConversation(characterId, 'tavern')
