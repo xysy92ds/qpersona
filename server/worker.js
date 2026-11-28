@@ -368,6 +368,239 @@ async function plazaMine(req, env, user) {
   return json(req, { ok: true, items: (rows.results || []).map((r) => ({ id: r.id, payload: safeParse(r.payload), status: r.status, createdAt: r.created_at })) })
 }
 
+// ---------- 真人群聊 ----------
+// 只存 AI 成员的 id/name/avatar 元数据，不存任何模型 Key；AI 调用留在各自客户端。
+const GROUP_NAME_MAX = 40
+const GROUP_MEMBER_MAX = 50
+const GROUP_BOT_MAX = 20
+const GROUP_MSG_MAX = 4000
+const GROUP_BOT_AVATAR_MAX = 40_000
+
+function groupMessageOut(groupId, r) {
+  return {
+    id: r.id,
+    groupId,
+    senderUserId: r.sender_user_id || null,
+    senderName: r.sender_name,
+    botId: r.bot_id || null,
+    body: r.body,
+    createdAt: r.created_at,
+  }
+}
+
+async function createGroup(req, env, user) {
+  const body = await readJSON(req)
+  const name = String(body.name || '').trim()
+  if (!name) return err(req, '群名不能为空')
+  if ([...name].length > GROUP_NAME_MAX) return err(req, `群名太长（最多 ${GROUP_NAME_MAX} 字）`)
+
+  // 真人成员：去重、忽略自己（owner 自动入群）
+  const humanNames = []
+  const seenNames = new Set([user.username.toLowerCase()])
+  const rawHumans = Array.isArray(body.humanUsernames) ? body.humanUsernames : []
+  if (rawHumans.length > GROUP_MEMBER_MAX) return err(req, `真人成员最多 ${GROUP_MEMBER_MAX} 人`)
+  for (const raw of rawHumans) {
+    const lower = String(raw || '').trim().toLowerCase()
+    if (!lower || seenNames.has(lower)) continue
+    seenNames.add(lower)
+    humanNames.push(lower)
+  }
+
+  // AI 成员：只保存展示元数据
+  const bots = []
+  const seenBots = new Set()
+  const rawBots = Array.isArray(body.bots) ? body.bots : []
+  if (rawBots.length > GROUP_BOT_MAX) return err(req, `AI 成员最多 ${GROUP_BOT_MAX} 个`)
+  for (const raw of rawBots) {
+    if (!raw || typeof raw !== 'object') continue
+    const botId = String(raw.id ?? raw.botId ?? '').trim()
+    const botName = String(raw.name ?? raw.botName ?? '').trim()
+    const avatar = raw.avatar == null ? '' : String(raw.avatar)
+    if (!botId) return err(req, 'AI 成员缺少 id')
+    if (botId.length > 120) return err(req, 'AI 成员 id 太长')
+    if (!botName) return err(req, 'AI 成员缺少名字')
+    if ([...botName].length > GROUP_NAME_MAX) return err(req, `AI 成员名字太长（最多 ${GROUP_NAME_MAX} 字）`)
+    if (avatar.length > GROUP_BOT_AVATAR_MAX) return err(req, 'AI 成员头像太大')
+    if (seenBots.has(botId)) continue
+    seenBots.add(botId)
+    bots.push({ id: botId, name: botName, avatar })
+  }
+
+  // 校验真人成员：存在 + 已是好友
+  let humans = []
+  if (humanNames.length) {
+    const ph = humanNames.map(() => '?').join(',')
+    const found = await env.DB.prepare(`SELECT id, username, username_lower FROM users WHERE username_lower IN (${ph})`)
+      .bind(...humanNames).all()
+    humans = found.results || []
+    const foundSet = new Set(humans.map((r) => r.username_lower))
+    const missing = humanNames.filter((n) => !foundSet.has(n))
+    if (missing.length) return err(req, `找不到用户：${missing.slice(0, 3).join('、')}`, 404)
+    const ids = humans.map((r) => r.id)
+    const idPh = ids.map(() => '?').join(',')
+    const rows = await env.DB.prepare(
+      `SELECT requester_id, addressee_id FROM friendships
+       WHERE status = 'accepted' AND ((requester_id = ? AND addressee_id IN (${idPh})) OR (addressee_id = ? AND requester_id IN (${idPh})))`
+    ).bind(user.id, ...ids, user.id, ...ids).all()
+    const friendIds = new Set()
+    for (const r of rows.results || []) friendIds.add(r.requester_id === user.id ? r.addressee_id : r.requester_id)
+    const notFriends = humans.filter((r) => !friendIds.has(r.id)).map((r) => r.username)
+    if (notFriends.length) return err(req, `还不是好友：${notFriends.slice(0, 3).join('、')}`, 403)
+  }
+
+  const id = crypto.randomUUID()
+  const now = Date.now()
+  const stmts = [
+    env.DB.prepare('INSERT INTO groups (id, name, owner_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+      .bind(id, name, user.id, now, now),
+    env.DB.prepare("INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (?, ?, 'owner', ?)")
+      .bind(id, user.id, now),
+  ]
+  for (const r of humans) {
+    stmts.push(env.DB.prepare("INSERT INTO group_members (group_id, user_id, role, joined_at) VALUES (?, ?, 'member', ?)")
+      .bind(id, r.id, now))
+  }
+  for (const b of bots) {
+    stmts.push(env.DB.prepare('INSERT INTO group_bots (group_id, bot_id, name, avatar, created_at) VALUES (?, ?, ?, ?, ?)')
+      .bind(id, b.id, b.name, b.avatar, now))
+  }
+  for (let i = 0; i < stmts.length; i += 50) await env.DB.batch(stmts.slice(i, i + 50))
+
+  return json(req, {
+    ok: true,
+    group: {
+      id,
+      name,
+      ownerId: user.id,
+      createdAt: now,
+      updatedAt: now,
+      members: [
+        { id: user.id, username: user.username, role: 'owner' },
+        ...humans.map((r) => ({ id: r.id, username: r.username, role: 'member' })),
+      ],
+      bots,
+      lastMessage: null,
+    },
+  })
+}
+
+async function listGroups(req, env, user) {
+  const rows = await env.DB.prepare(
+    `SELECT g.id, g.name, g.owner_id, g.created_at, g.updated_at
+     FROM groups g JOIN group_members m ON m.group_id = g.id
+     WHERE m.user_id = ? ORDER BY g.updated_at DESC LIMIT 100`
+  ).bind(user.id).all()
+  const groups = rows.results || []
+  if (!groups.length) return json(req, { ok: true, groups: [] })
+
+  const ids = groups.map((g) => g.id)
+  const ph = ids.map(() => '?').join(',')
+  const memberRows = await env.DB.prepare(
+    `SELECT gm.group_id, gm.user_id, gm.role, u.username FROM group_members gm JOIN users u ON u.id = gm.user_id
+     WHERE gm.group_id IN (${ph}) ORDER BY gm.joined_at ASC`
+  ).bind(...ids).all()
+  const botRows = await env.DB.prepare(
+    `SELECT group_id, bot_id, name, avatar FROM group_bots WHERE group_id IN (${ph}) ORDER BY created_at ASC`
+  ).bind(...ids).all()
+  const lastRows = await env.DB.prepare(
+    `SELECT m.group_id, m.id, m.sender_user_id, m.sender_name, m.bot_id, m.body, m.created_at
+     FROM group_messages m
+     WHERE m.group_id IN (${ph}) AND m.created_at = (SELECT MAX(m2.created_at) FROM group_messages m2 WHERE m2.group_id = m.group_id)
+     ORDER BY m.created_at DESC`
+  ).bind(...ids).all()
+
+  const memberMap = new Map()
+  for (const r of memberRows.results || []) {
+    if (!memberMap.has(r.group_id)) memberMap.set(r.group_id, [])
+    memberMap.get(r.group_id).push({ id: r.user_id, username: r.username, role: r.role })
+  }
+  const botMap = new Map()
+  for (const r of botRows.results || []) {
+    if (!botMap.has(r.group_id)) botMap.set(r.group_id, [])
+    botMap.get(r.group_id).push({ id: r.bot_id, name: r.name, avatar: r.avatar || '' })
+  }
+  const lastMap = new Map()
+  for (const r of lastRows.results || []) {
+    if (!lastMap.has(r.group_id)) lastMap.set(r.group_id, groupMessageOut(r.group_id, r))
+  }
+  return json(req, {
+    ok: true,
+    groups: groups.map((g) => ({
+      id: g.id,
+      name: g.name,
+      ownerId: g.owner_id,
+      createdAt: g.created_at,
+      updatedAt: g.updated_at,
+      members: memberMap.get(g.id) || [],
+      bots: botMap.get(g.id) || [],
+      lastMessage: lastMap.get(g.id) || null,
+    })),
+  })
+}
+
+async function groupMessages(req, env, user, groupId) {
+  const group = await env.DB.prepare('SELECT id FROM groups WHERE id = ?').bind(groupId).first()
+  if (!group) return err(req, '群不存在', 404)
+  const member = await env.DB.prepare('SELECT role FROM group_members WHERE group_id = ? AND user_id = ?').bind(groupId, user.id).first()
+  if (!member) return err(req, '不是群成员', 403)
+  const url = new URL(req.url)
+  const since = Math.max(0, Number(url.searchParams.get('since')) || 0)
+  const limit = Math.min(500, Math.max(1, Number(url.searchParams.get('limit')) || 100))
+  const rows = await env.DB.prepare(
+    'SELECT id, sender_user_id, sender_name, bot_id, body, created_at FROM group_messages WHERE group_id = ? AND created_at > ? ORDER BY created_at ASC, id ASC LIMIT ?'
+  ).bind(groupId, since, limit).all()
+  return json(req, {
+    ok: true,
+    groupId,
+    since,
+    items: (rows.results || []).map((r) => groupMessageOut(groupId, r)),
+    hasMore: (rows.results || []).length === limit,
+    now: Date.now(),
+  })
+}
+
+async function sendGroupMessage(req, env, user, groupId) {
+  const group = await env.DB.prepare('SELECT id FROM groups WHERE id = ?').bind(groupId).first()
+  if (!group) return err(req, '群不存在', 404)
+  const member = await env.DB.prepare('SELECT role FROM group_members WHERE group_id = ? AND user_id = ?').bind(groupId, user.id).first()
+  if (!member) return err(req, '不是群成员', 403)
+
+  const body = await readJSON(req)
+  const text = String(body.body ?? body.text ?? '').trim()
+  if (!text) return err(req, '消息不能为空')
+  if ([...text].length > GROUP_MSG_MAX) return err(req, `消息太长（最多 ${GROUP_MSG_MAX} 字）`)
+
+  const rawBotId = body.botId == null ? '' : String(body.botId).trim()
+  const rawBotName = body.botName == null ? '' : String(body.botName).trim()
+  if (rawBotName && !rawBotId) return err(req, 'AI 消息需要 botId')
+  if (rawBotName && [...rawBotName].length > GROUP_NAME_MAX) return err(req, 'AI 成员名字太长')
+
+  // 真人消息：senderUserId = 当前用户；AI 消息：botId 必须在本群 AI 名单里，senderUserId 为空
+  let senderUserId = user.id
+  let senderName = user.username
+  let botId = null
+  if (rawBotId) {
+    if (rawBotId.length > 120) return err(req, 'botId 太长')
+    const bot = await env.DB.prepare('SELECT bot_id, name FROM group_bots WHERE group_id = ? AND bot_id = ?').bind(groupId, rawBotId).first()
+    if (!bot) return err(req, '这个 AI 成员不在群里', 400)
+    botId = bot.bot_id
+    senderUserId = null
+    senderName = rawBotName || bot.name
+  }
+
+  const id = crypto.randomUUID()
+  // 同群内 createdAt 单调递增，避免 since 分页在毫秒撞车时丢消息
+  const prev = await env.DB.prepare('SELECT MAX(created_at) AS max_created FROM group_messages WHERE group_id = ?').bind(groupId).first()
+  const createdAt = Math.max(Date.now(), (prev?.max_created || 0) + 1)
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO group_messages (id, group_id, sender_user_id, sender_name, bot_id, body, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, groupId, senderUserId, senderName, botId, text, createdAt),
+    env.DB.prepare('UPDATE groups SET updated_at = ? WHERE id = ?').bind(createdAt, groupId),
+  ])
+  const message = { id, groupId, senderUserId, senderName, botId, body: text, createdAt }
+  return json(req, { ok: true, id, createdAt, message })
+}
+
 async function cleanup(env) {
   const now = Date.now()
   const cutoff = now - INACTIVE_DAYS * 86400000
@@ -421,6 +654,18 @@ export default {
       if (path === '/api/plaza/mine' && req.method === 'GET') return user ? plazaMine(req, env, user) : err(req, '未登录', 401)
       if (path === '/api/sync/push' && req.method === 'POST') return user ? push(req, env, user) : err(req, '未登录', 401)
       if (path === '/api/sync/pull' && req.method === 'GET') return user ? pull(req, env, user) : err(req, '未登录', 401)
+      // 真人群聊
+      if (path === '/api/groups' && req.method === 'GET') return user ? listGroups(req, env, user) : err(req, '未登录', 401)
+      if (path === '/api/groups' && req.method === 'POST') return user ? createGroup(req, env, user) : err(req, '未登录', 401)
+      const groupMessagesMatch = path.match(/^\/api\/groups\/([^/]+)\/messages$/)
+      if (groupMessagesMatch) {
+        if (!user) return err(req, '未登录', 401)
+        if (req.method !== 'GET' && req.method !== 'POST') return err(req, 'not found', 404)
+        const groupId = decodeURIComponent(groupMessagesMatch[1])
+        if (!groupId || groupId.length > 80) return err(req, '群 id 不合法')
+        if (req.method === 'GET') return groupMessages(req, env, user, groupId)
+        return sendGroupMessage(req, env, user, groupId)
+      }
       return err(req, 'not found', 404)
     } catch (e) {
       console.error(e)

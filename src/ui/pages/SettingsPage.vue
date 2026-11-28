@@ -172,7 +172,7 @@ async function exportData() {
   ])
   const payload = {
     app: 'qpersona',
-    version: '0.22.0',
+    version: '0.23.0',
     exportedAt: new Date().toISOString(),
     characters,
     conversations,
@@ -624,13 +624,13 @@ function goBack() {
       <div class="sheet-block">
         <div class="cell" style="cursor: default">
           <div class="cell__body"><div class="cell__title">笺页 / JianYIE</div><div class="cell__desc">开源非商业 · 学习与演示用途</div></div>
-          <span class="cell__value">0.22.0</span>
+          <span class="cell__value">0.23.0</span>
         </div>
       </div>
 
       <div class="foot">
         界面与图标均为原创；<br />
-        当前版本不连接真实聊天服务，好友均为本地角色。
+        好友包括本地 AI 角色和真人；真人消息经云端中转保留 7 天，不接入第三方 IM。
       </div>
     </div>
 

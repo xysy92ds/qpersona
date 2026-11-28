@@ -32,11 +32,44 @@ const form = reactive({
 
 const isEdit = computed(() => !!form.id)
 
-const presets = [
-  { label: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', name: 'DeepSeek' },
-  { label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', name: 'OpenAI' },
-  { label: '硅基流动', baseUrl: 'https://api.siliconflow.cn/v1', model: 'deepseek-ai/DeepSeek-V3', name: '硅基流动' },
-  { label: ' Ollama', baseUrl: 'http://127.0.0.1:11434/v1', model: 'llama3.1', name: 'Ollama 本地' },
+interface Preset {
+  label: string
+  name: string
+  baseUrl: string
+  model: string
+}
+
+// 预设只填名称 / Base URL / 模型名，绝不碰 apiKey（见 applyPreset）
+const presetGroups: { title: string; items: Preset[] }[] = [
+  {
+    title: '国内',
+    items: [
+      { label: 'DeepSeek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
+      { label: '硅基流动', name: '硅基流动', baseUrl: 'https://api.siliconflow.cn/v1', model: 'deepseek-ai/DeepSeek-V3' },
+      { label: 'Moonshot', name: 'Moonshot 月之暗面', baseUrl: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k' },
+      { label: '智谱', name: '智谱 GLM', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
+      {
+        label: '百炼通义',
+        name: '百炼 · 通义千问',
+        baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        model: 'qwen-plus',
+      },
+    ],
+  },
+  {
+    title: '海外 / 本地',
+    items: [
+      { label: 'OpenAI', name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+      { label: 'OpenRouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini' },
+      {
+        label: 'Groq',
+        name: 'Groq',
+        baseUrl: 'https://api.groq.com/openai/v1',
+        model: 'llama-3.3-70b-versatile',
+      },
+      { label: 'Ollama', name: 'Ollama 本地', baseUrl: 'http://127.0.0.1:11434/v1', model: 'llama3.1' },
+    ],
+  },
 ]
 
 function openNew() {
@@ -73,10 +106,11 @@ function openEdit(p: ApiProfile) {
   showEditor.value = true
 }
 
-function applyPreset(p: (typeof presets)[number]) {
+function applyPreset(p: Preset) {
   form.name = p.name
   form.baseUrl = p.baseUrl
   form.model = p.model
+  if (form.apiKey.trim()) showToast('已填入预设，已填的 Key 保持不变', 1600)
 }
 
 function valid(): boolean {
@@ -239,14 +273,26 @@ const boundSlots = computed(() => {
       </div>
 
       <div class="hint">
-        API Key 只保存在这台设备的 IndexedDB 里，除了发给你填的接口地址，不会同步到任何地方。
+        API Key 只保存在这台设备上，不会同步到云端；换新设备、清缓存或重装后需要重新填写 Key。
         每个角色还可以在「角色资料」里覆盖这里的绑定。
       </div>
     </div>
 
     <BottomSheet v-model="showEditor" :title="isEdit ? '编辑模型方案' : '添加模型方案'">
-      <div class="presets">
-        <button v-for="p in presets" :key="p.label" class="preset" @click="applyPreset(p)">{{ p.label }}</button>
+      <div class="preset-block">
+        <div class="preset-tip">选预设只会填名称、Base URL 和模型名，不会覆盖已填的 Key；每一行可以左右滑动。</div>
+        <div v-for="g in presetGroups" :key="g.title" class="preset-group">
+          <div class="preset-group__title">{{ g.title }}</div>
+          <div class="presets">
+            <button
+              v-for="p in g.items"
+              :key="p.label"
+              class="preset"
+              :class="{ on: form.baseUrl === p.baseUrl }"
+              @click="applyPreset(p)"
+            >{{ p.label }}</button>
+          </div>
+        </div>
       </div>
       <label class="field">
         <span class="field__label">方案名称</span>
@@ -260,6 +306,7 @@ const boundSlots = computed(() => {
         <span class="field__label">API Key</span>
         <input v-model="form.apiKey" class="input" type="password" placeholder="sk-..." autocomplete="off" />
       </label>
+      <div class="hint hint--tight">Key 只保存在本机，云同步不会携带；换新设备要重新填写。</div>
       <label class="field">
         <span class="field__label">
           模型名
@@ -459,22 +506,55 @@ const boundSlots = computed(() => {
   font-size: 13px;
   flex: none;
 }
+.preset-block {
+  padding: 6px 0 2px;
+}
+.preset-tip {
+  padding: 0 16px 8px;
+  font-size: 11.5px;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+.preset-group + .preset-group {
+  margin-top: 8px;
+}
+.preset-group__title {
+  padding: 0 16px 6px;
+  font-size: 11px;
+  color: var(--text-3);
+}
 .presets {
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
-  padding: 6px 16px 2px;
+  padding: 0 16px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.presets::-webkit-scrollbar {
+  display: none;
 }
 .preset {
+  flex: none;
+  white-space: nowrap;
   padding: 6px 12px;
   border-radius: 999px;
   background: var(--bg-hover);
   font-size: 12.5px;
   color: var(--text-2);
 }
+.preset.on {
+  background: rgba(0, 153, 255, 0.12);
+  color: var(--brand);
+}
 .preset:active {
   background: rgba(0, 153, 255, 0.14);
   color: var(--brand);
+}
+.hint--tight {
+  padding-top: 0;
+  padding-bottom: 4px;
 }
 .fetch-models {
   margin-left: auto;

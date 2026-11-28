@@ -24,6 +24,7 @@ import { useCloudStore } from './cloud'
 import { useMemoryStore } from './memory'
 import { useHumanStore } from './human'
 import { fetchDelivery } from '@/core/human'
+import { sendServerGroupMessage } from '@/core/groups'
 import { useSettingsStore } from './settings'
 import { useStickersStore } from './stickers'
 
@@ -117,6 +118,7 @@ export const useChatStore = defineStore('chat', {
       if (!text) return
 
       const contacts = useContactsStore()
+      const settings = useSettingsStore()
       const conv = contacts.conversationById(convId)
       if (!conv) return
       await this.load(convId)
@@ -134,6 +136,19 @@ export const useChatStore = defineStore('chat', {
       }
       await this.pushLocal(convId, userMsg)
       await contacts.touch(convId, { lastText: text, lastTs: userMsg.ts, unread: 0 })
+
+      if (conv.kind === 'group' && conv.serverGroupId) {
+        const cloud = useCloudStore()
+        if (cloud.loggedIn) {
+          try {
+            const sent = await sendServerGroupMessage(settings.cloudUrl, cloud.token, conv.serverGroupId, { body: text })
+            userMsg.serverId = sent.id
+            await putMessage(userMsg)
+          } catch (e) {
+            await this.addTip(convId, `群消息没同步到云端：${e instanceof Error ? e.message : '发送失败'}`)
+          }
+        }
+      }
 
       const peer = contacts.characterById(conv.characterId)
       if (peer?.ext.human) {
@@ -337,7 +352,7 @@ export const useChatStore = defineStore('chat', {
       const list = this.byConv[convId] ?? []
       const members = (conv.memberIds ?? [])
         .map((id) => contacts.characterById(id))
-        .filter((c): c is Character => !!c && !c.ext.human && c.ext.toggles.chat && !conv.groupMuted?.[c.id])
+        .filter((c): c is Character => !!c && !c.ext.human && !c.ext.remoteBot && c.ext.toggles.chat && !conv.groupMuted?.[c.id])
       if (!members.length) return
 
       const now = Date.now()
@@ -353,7 +368,9 @@ export const useChatStore = defineStore('chat', {
         }
       }
 
-      const lastUser = [...list].reverse().find((m) => m.role === 'user')
+      const lastUser = [...list].reverse().find(
+        (m) => m.role === 'user' || (m.role === 'assistant' && !!m.characterId && !!contacts.characterById(m.characterId)?.ext.human),
+      )
       const text = lastUser ? messageText(lastUser) : ''
       const speakerIds = list
         .filter((m) => m.role === 'assistant' && m.characterId)
@@ -456,7 +473,10 @@ export const useChatStore = defineStore('chat', {
       const memory = useMemoryStore()
       const list = (this.byConv[convId] ??= [])
       const names: Record<string, string> = {}
-      for (const m of members) names[m.id] = m.ext.qq.nickname || m.card.name
+      for (const id of conv.memberIds ?? []) {
+        const m = contacts.characterById(id)
+        if (m) names[m.id] = m.ext.qq.nickname || m.card.name
+      }
       const displayName = names[ch.id] ?? ch.card.name
 
       const profile = settings.profileFor('text_main', ch.ext.routing.text_main)
@@ -643,6 +663,24 @@ export const useChatStore = defineStore('chat', {
       }
 
       await putMessage(reply)
+
+      if (conv.serverGroupId) {
+        const cloud = useCloudStore()
+        if (cloud.loggedIn && reply.text.trim()) {
+          try {
+            const sent = await sendServerGroupMessage(settings.cloudUrl, cloud.token, conv.serverGroupId, {
+              body: reply.text,
+              botId: ch.id,
+              botName: displayName,
+            })
+            reply.serverId = sent.id
+            await putMessage(reply)
+          } catch {
+            /* 本地仍然显示，群同步失败不阻塞聊天 */
+          }
+        }
+      }
+
       const latest = contacts.conversationById(convId)
       await contacts.touch(convId, {
         lastText: `${displayName}：${preview.slice(0, 60)}`,

@@ -116,6 +116,8 @@ export interface PersonaExt {
   stats?: Record<string, unknown>
   /** 真人好友：云端账号 ID 与用户名 */
   human?: { userId: string; username: string }
+  /** 别人群里的 AI 成员，只做展示，不在本机调用模型 */
+  remoteBot?: { groupId: string; botId: string }
 }
 
 export interface Character {
@@ -154,6 +156,12 @@ export interface Conversation {
   lastProactiveAt?: number
   /** 群聊激活状态：characterId -> 活跃截止时间戳 */
   groupActive?: Record<string, number>
+  /** 真人群聊的服务端群 ID；为空表示纯本地群 */
+  serverGroupId?: string
+  /** 服务端群主用户 ID */
+  serverGroupOwnerId?: string
+  /** 已拉取到的服务端消息时间戳 */
+  serverGroupSince?: number
   /** 群聊最近发言时间：characterId -> 时间戳 */
   groupLastSpoke?: Record<string, number>
   /** 群聊每个成员被唤醒的时间：characterId -> 时间戳 */
@@ -260,6 +268,8 @@ export interface Message {
   addressees?: string[]
   /** 群聊里这条回复所属的一轮（触发它的用户消息 ID） */
   roundId?: string
+  /** 真人群聊的服务端消息 ID（用于去重） */
+  serverId?: string
   /** 群聊里这条回复针对的消息 ID */
   replyToId?: string
   /** 真人消息的云端中转 ID */

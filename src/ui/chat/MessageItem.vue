@@ -75,6 +75,10 @@ function onRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement
   if (!target.closest('.qq-message__avatar-span')) return
   if (isSelf.value) return
+  if (avatarHeld) {
+    avatarHeld = false
+    return
+  }
   const now = Date.now()
   if (now - lastAvatarTap < 320) {
     lastAvatarTap = 0
@@ -99,14 +103,26 @@ function formatSize(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
-const emit = defineEmits<{ longpress: [Message]; poke: [string]; preview: [string] }>()
+const emit = defineEmits<{ longpress: [Message]; poke: [string]; preview: [string]; at: [string] }>()
 let timer: number | null = null
+let avatarTimer: number | null = null
+let avatarHeld = false
 let startX = 0
 let startY = 0
 
 function down(e: PointerEvent) {
   startX = e.clientX
   startY = e.clientY
+  const target = e.target as HTMLElement
+  if (!isSelf.value && target.closest('.qq-message__avatar-span')) {
+    avatarHeld = false
+    avatarTimer = window.setTimeout(() => {
+      avatarTimer = null
+      avatarHeld = true
+      emit('at', props.characterName)
+    }, 480)
+    return
+  }
   timer = window.setTimeout(() => {
     timer = null
     emit('longpress', props.message)
@@ -116,6 +132,10 @@ function cancel() {
   if (timer) {
     window.clearTimeout(timer)
     timer = null
+  }
+  if (avatarTimer) {
+    window.clearTimeout(avatarTimer)
+    avatarTimer = null
   }
 }
 function move(e: PointerEvent) {

@@ -86,11 +86,12 @@ const activeMsg = ref<Message | null>(null)
 const quoting = ref<QuotePayload | null>(null)
 const previewUrl = ref('')
 const membersOpen = ref(false)
+const composerRef = ref<InstanceType<typeof Composer> | null>(null)
 
 const members = computed(() =>
   (conv.value?.memberIds ?? [])
     .map((id) => contacts.characterById(id))
-    .filter((m): m is NonNullable<typeof m> => !!m && !m.ext.human),
+    .filter((m): m is NonNullable<typeof m> => !!m),
 )
 
 const mentionNames = computed(() =>
@@ -170,6 +171,10 @@ watch(
     void chat.checkDelivery(props.id)
   },
 )
+
+function atMember(name: string) {
+  composerRef.value?.insertMention(name)
+}
 
 function goBack() {
   if (window.history.length > 1) router.back()
@@ -410,12 +415,14 @@ async function pokeBy(name: string) {
           @longpress="openMsgMenu"
           @poke="pokeBy"
           @preview="previewUrl = $event"
+          @at="atMember"
         />
       </template>
       <div class="chat-list__pad" />
     </div>
 
     <Composer
+      ref="composerRef"
       :streaming="streaming"
       :quote="quoting"
       :mention-names="mentionNames"

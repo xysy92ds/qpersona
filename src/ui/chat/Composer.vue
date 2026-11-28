@@ -134,6 +134,12 @@ function insertText(s: string) {
   })
 }
 
+function insertMention(name: string) {
+  const prefix = text.value && !text.value.endsWith(' ') ? ' ' : ''
+  insertText(`${prefix}@${name} `)
+  nextTick(() => area.value?.focus())
+}
+
 function pickEmoji(e: string) {
   insertText(e)
 }
@@ -475,6 +481,8 @@ onUnmounted(() => {
 })
 
 watch(text, () => nextTick(resize))
+
+defineExpose({ focus: () => area.value?.focus(), insertMention })
 </script>
 
 <template>

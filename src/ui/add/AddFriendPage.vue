@@ -281,7 +281,7 @@ function goBack() {
       <template v-if="tab === 'add'">
       <div class="banner">
         <div class="banner__title">先加一个角色</div>
-        <div class="banner__text">导入酒馆卡、从零创建，或用聊天记录培养。真人好友会在后续版本加入。</div>
+        <div class="banner__text">导入酒馆卡、从零创建，或用聊天记录培养；也可以按用户名添加真人好友。</div>
       </div>
 
       <div class="sheet-block options">

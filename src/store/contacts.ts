@@ -165,7 +165,11 @@ export const useContactsStore = defineStore('contacts', {
     },
 
     /** 建群：成员至少两个（UI 会校验），先落一条说明消息 */
-    async createGroup(memberIds: string[], title: string): Promise<Conversation> {
+    async createGroup(
+      memberIds: string[],
+      title: string,
+      server?: { serverGroupId: string; serverGroupOwnerId: string; since?: number },
+    ): Promise<Conversation> {
       const now = Date.now()
       const clean = [...new Set(memberIds)].filter((id) => !!this.characterById(id))
       const conv: Conversation = {
@@ -174,6 +178,9 @@ export const useContactsStore = defineStore('contacts', {
         profile: 'qq',
         title: title.trim() || '新群聊',
         memberIds: clean,
+        serverGroupId: server?.serverGroupId,
+        serverGroupOwnerId: server?.serverGroupOwnerId,
+        serverGroupSince: server?.since ?? (server ? Date.now() : undefined),
         lastText: '群聊已创建',
         lastTs: now,
         unread: 0,

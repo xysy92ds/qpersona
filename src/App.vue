@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import StatusBar from '@/ui/common/StatusBar.vue'
 import BottomNav from '@/ui/shell/BottomNav.vue'
@@ -8,9 +8,12 @@ import CallHost from '@/ui/chat/CallHost.vue'
 import DesktopSidebar from '@/ui/shell/DesktopSidebar.vue'
 import { useProactiveStore } from '@/store/proactive'
 import { useHumanStore } from '@/store/human'
+import { useGroupsStore } from '@/store/groups'
 import { useCloudStore } from '@/store/cloud'
 import { Capacitor } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
+import { useSettingsStore } from '@/store/settings'
+import { start as startDmPush, stop as stopDmPush } from '@/core/push'
 import ToastHost from '@/ui/common/ToastHost.vue'
 
 const route = useRoute()
@@ -24,7 +27,9 @@ function onMedia() {
 
 const proactive = useProactiveStore()
 const human = useHumanStore()
+const groups = useGroupsStore()
 const cloud = useCloudStore()
+const settings = useSettingsStore()
 let warmup: number | null = null
 let timer: number | null = null
 let dmTimer: number | null = null
@@ -39,18 +44,36 @@ onMounted(() => {
   media.addEventListener('change', onMedia)
   warmup = window.setTimeout(() => void proactive.tick(), 20_000)
   timer = window.setInterval(() => void proactive.tick(), 60_000)
-  dmTimer = window.setInterval(() => void human.poll().catch(() => {}), 10_000)
+  dmTimer = window.setInterval(() => {
+    void human.poll().catch(() => {})
+    void groups.poll().catch(() => {})
+  }, 10_000)
   window.setTimeout(() => void human.poll().catch(() => {}), 3_000)
+  window.setTimeout(() => void groups.poll().catch(() => {}), 3_500)
   window.setTimeout(autoSync, 3_000)
   syncTimer = window.setInterval(autoSync, 120_000)
   if (Capacitor.isNativePlatform()) {
     void LocalNotifications.requestPermissions().catch(() => {})
   }
+  if (cloud.loggedIn) void startDmPush({ token: cloud.token, baseUrl: settings.cloudUrl })
   document.addEventListener('visibilitychange', onVisible)
 })
 
+watch(
+  () => [cloud.loggedIn, cloud.token, settings.cloudUrl],
+  () => {
+    if (cloud.loggedIn && cloud.token) {
+      void startDmPush({ token: cloud.token, baseUrl: settings.cloudUrl })
+    } else {
+      void stopDmPush()
+    }
+  },
+)
+
 function onVisible() {
-  if (document.visibilityState === 'visible') autoSync()
+  if (document.visibilityState !== 'visible') return
+  autoSync()
+  if (cloud.loggedIn && cloud.token) void startDmPush({ token: cloud.token, baseUrl: settings.cloudUrl })
 }
 
 onUnmounted(() => {

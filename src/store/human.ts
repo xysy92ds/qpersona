@@ -147,7 +147,7 @@ export const useHumanStore = defineStore('human', {
         localStorage.setItem(key, String(res.now))
         if (added) {
           window.dispatchEvent(new CustomEvent('jianyie:dm', { detail: { conversationIds: [...convIds] } }))
-          if (Capacitor.isNativePlatform() && notices.length) {
+          if (Capacitor.isNativePlatform() && Capacitor.getPlatform() !== 'android' && notices.length) {
             try {
               await LocalNotifications.schedule({
                 notifications: notices.map((n) => ({

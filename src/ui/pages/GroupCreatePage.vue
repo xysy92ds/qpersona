@@ -4,15 +4,20 @@ import { useRouter } from 'vue-router'
 import { CheckmarkCircle, ChevronBack, EllipseOutline } from '@vicons/ionicons5'
 import Avatar from '@/ui/common/Avatar.vue'
 import { useContactsStore } from '@/store/contacts'
+import { useCloudStore } from '@/store/cloud'
+import { useSettingsStore } from '@/store/settings'
+import { createServerGroup } from '@/core/groups'
 import { showToast } from '@/ui/common/toast'
 
 const router = useRouter()
 const contacts = useContactsStore()
+const cloud = useCloudStore()
+const settings = useSettingsStore()
 
 const selected = ref<string[]>([])
 const title = ref('')
 
-const list = computed(() => contacts.characters.filter((c) => !c.ext.human))
+const list = computed(() => contacts.characters)
 const canCreate = computed(() => selected.value.length >= 2)
 
 function toggle(id: string) {
@@ -26,10 +31,41 @@ async function create() {
     showToast('至少选两个角色')
     return
   }
-  const names = list.value
-    .filter((c) => selected.value.includes(c.id))
-    .map((c) => c.ext.qq.nickname || c.card.name)
+  const picked = list.value.filter((c) => selected.value.includes(c.id))
+  const names = picked.map((c) => c.ext.qq.nickname || c.card.name)
   const name = title.value.trim() || names.slice(0, 3).join('、')
+  const humans = picked.filter((c) => c.ext.human)
+  if (humans.length) {
+    if (!cloud.loggedIn) {
+      showToast('拉真人进群需要先登录云端账号')
+      return
+    }
+    const bots = picked
+      .filter((c) => !c.ext.human)
+      .map((c) => {
+        const avatar = c.ext.qq.avatar || ''
+        return {
+          id: c.id,
+          name: c.ext.qq.nickname || c.card.name,
+          avatar: avatar.startsWith('data:') && avatar.length > 38_000 ? '' : avatar.slice(0, 39_000),
+        }
+      })
+    try {
+      const sg = await createServerGroup(settings.cloudUrl, cloud.token, {
+        name,
+        humanUsernames: humans.map((c) => c.ext.human!.username),
+        bots,
+      })
+      const conv = await contacts.createGroup(selected.value, name, {
+        serverGroupId: sg.id,
+        serverGroupOwnerId: sg.ownerId,
+      })
+      router.replace(`/chat/${conv.id}`)
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '创建群失败', 3500)
+    }
+    return
+  }
   const conv = await contacts.createGroup(selected.value, name)
   router.replace(`/chat/${conv.id}`)
 }
@@ -50,7 +86,7 @@ function goBack() {
 
     <div class="scroll">
       <div class="tip">
-        选中至少两位好友。群里的角色只会被 @、叫到名字，或聊到他们感兴趣的事时才开口。
+        选中至少两位好友。真人会收到群消息；AI 角色只在被 @、叫到名字或聊到感兴趣的事时开口。
       </div>
 
       <label class="field">

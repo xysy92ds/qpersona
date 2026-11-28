@@ -36,7 +36,7 @@ const list = computed(() => contacts.characters)
           <div class="cell-icon" style="background: #34c759"><PeopleOutline /></div>
           <div class="cell__body">
             <div class="cell__title">发起群聊</div>
-            <div class="cell__desc">把多个 AI 角色拉进一个群</div>
+            <div class="cell__desc">把 AI 角色和真人好友拉进一个群</div>
           </div>
           <span class="cell__value">去创建</span>
         </button>
@@ -53,7 +53,7 @@ const list = computed(() => contacts.characters)
         </button>
         <div v-if="!list.length" class="empty">还没有好友，去「新的朋友」加一个。</div>
       </div>
-      <div class="foot-note">所有好友都是本地 AI 角色，不涉及真实聊天账号</div>
+      <div class="foot-note">好友包括本地 AI 角色和真人；真人消息经云端中转，离线保留 7 天</div>
     </div>
   </div>
 </template>

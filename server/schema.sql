@@ -61,3 +61,43 @@ CREATE TABLE IF NOT EXISTS relay_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_relay_recipient ON relay_messages(recipient_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_relay_expiry ON relay_messages(expires_at);
+
+-- 真人群聊：群 / 成员 / AI 成员元数据（不存 Key）/ 群消息
+CREATE TABLE IF NOT EXISTS groups (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  owner_id TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_groups_owner ON groups(owner_id);
+CREATE INDEX IF NOT EXISTS idx_groups_updated ON groups(updated_at);
+
+CREATE TABLE IF NOT EXISTS group_members (
+  group_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'member',
+  joined_at INTEGER NOT NULL,
+  PRIMARY KEY (group_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id);
+
+CREATE TABLE IF NOT EXISTS group_bots (
+  group_id TEXT NOT NULL,
+  bot_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  avatar TEXT,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (group_id, bot_id)
+);
+
+CREATE TABLE IF NOT EXISTS group_messages (
+  id TEXT PRIMARY KEY,
+  group_id TEXT NOT NULL,
+  sender_user_id TEXT,
+  sender_name TEXT NOT NULL,
+  bot_id TEXT,
+  body TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_group_messages_group ON group_messages(group_id, created_at);
