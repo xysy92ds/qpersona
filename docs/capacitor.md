@@ -160,14 +160,15 @@ const status = await getStatus()
 
 ### 已知限制
 
-- **真机未测**：本仓库的开发环境没有 Android SDK / JDK，无法在本机 `./gradlew assembleDebug`，
-  只用 GitHub Actions（`.github/workflows/android.yml`）构建；推送后在 Actions 看构建结果并安装验证。
-- 回到 App 前台后，网页层会从自己的 `since` 重新拉取后台期间未入库的消息，因此后台已提醒过的消息
-  在回到 App 时可能再提醒一次（通知 id 相同会替换成同一条）；要彻底消除需要原生把消息写回 WebView
-  的 IndexedDB，暂未实现。
-- 原生通知只有文字，点按只能打开 App 首页，不能直达对应会话（会话 id 由 WebView 侧生成，原生拿不到）。
-- App 在前台时两套轮询并行（原生静默只推进 since），流量和耗电轻微增加；如需极致省电，可在
-  App 可见时 `stop()`、退到后台前再 `start()`，但后台启动会受 Android 12+ 限制，不推荐。
+- **真机未测**：构建产物来自 GitHub Actions（`.github/workflows/android.yml`）或本地命令行构建，
+  尚未装到真机上验证通知、后台存活与各 OEM 行为；OEM 放行方式见上一节。
+- 前台不弹系统通知：Android 端 `human.poll()` 已关闭网页层本地通知，原生服务在 App 可见时也只推进
+  `since`，所以 App 打开着时收到好友消息只更新会话 / 未读，不弹通知；回到前台时网页层会按自己的
+  `since` 重新拉取后台期间的消息入库，不会重复提醒。
+- 原生通知只有文字，点按只能打开 App 首页，不能直达对应会话（会话 id 由 WebView 侧生成，原生拿不到）；
+  需要直达的话得在 App.vue / ChatPage 里把「当前会话」通知给原生，再加 PendingIntent 参数。
+- App 在前台时服务照常轮询（静默只推进 since），流量和耗电轻微增加；不建议在
+  `visibilitychange` 里 stop/start（后台启动前台服务会被 Android 12+ 拦截）。
 
 ## 注意
 
